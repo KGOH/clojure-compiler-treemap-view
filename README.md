@@ -2,6 +2,8 @@
 
 Visualize Clojure codebase structure as an interactive treemap. See which functions are large, complex, or unused at a glance.
 
+**[Live Demo](https://kgoh.github.io/clojure-compiler-treemap-view/)** - Treemap of this project's own codebase
+
 Heavily inspired by [Jonathan Blow's code metrics viewer](https://youtu.be/IdpD5QIVOKQ?t=1192) for the JAI programming language.
 
 ## Why Use This
