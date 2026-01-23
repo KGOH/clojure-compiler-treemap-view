@@ -1,4 +1,4 @@
-(ns treemap.fixtures.gamma
+(ns clj-compiler-view.fixtures.gamma
   "Test fixtures for raw forms / threading macro analysis.")
 
 (defn threading-simple [x]

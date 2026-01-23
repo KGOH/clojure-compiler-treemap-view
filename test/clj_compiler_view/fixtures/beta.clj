@@ -1,4 +1,4 @@
-(ns treemap.fixtures.beta)
+(ns clj-compiler-view.fixtures.beta)
 
 (defn allocating-fn
   "A function that allocates collections - tests allocation counting."

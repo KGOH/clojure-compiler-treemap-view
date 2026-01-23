@@ -1,4 +1,4 @@
-(ns treemap.fixtures.alpha.utils)
+(ns clj-compiler-view.fixtures.alpha.utils)
 
 (defn helper
   "Helper function for testing."

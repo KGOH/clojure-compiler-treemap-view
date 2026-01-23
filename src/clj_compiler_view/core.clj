@@ -1,6 +1,6 @@
-(ns treemap.core
-  "HTML generation and public API for code metrics treemap."
-  (:require [treemap.analyze :as analyze]
+(ns clj-compiler-view.core
+  "HTML generation and public API for clj-compiler-view."
+  (:require [clj-compiler-view.analyze :as analyze]
             [jsonista.core :as json]
             [clojure.java.io :as io]
             [clojure.java.browse :as browse]

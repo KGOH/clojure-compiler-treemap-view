@@ -1,4 +1,4 @@
-# Treemap
+# clj-compiler-view
 
 Visualize Clojure codebase structure as an interactive treemap. See which functions are large, complex, or unused at a glance.
 
@@ -15,23 +15,23 @@ Heavily inspired by [Jonathan Blow's code metrics viewer](https://youtu.be/IdpD5
 
 ```clojure
 ;; deps.edn
-{:deps {treemap/treemap {:local/root "path/to/treemap"}}}
+{:deps {clj-compiler-view/clj-compiler-view {:local/root "path/to/clj-compiler-view"}}}
 ```
 
 ## Usage
 
 ```clojure
-(require '[treemap.core :as treemap])
+(require '[clj-compiler-view.core :as clj-compiler-view])
 
 ;; Analyze namespaces and open visualization in browser
-(treemap/treemap! '[my.app.core my.app.handlers])
+(clj-compiler-view/treemap! '[my.app.core my.app.handlers])
 
 ;; Analyze all loaded namespaces
-(treemap/treemap! (->> (all-ns)
+(clj-compiler-view/treemap! (->> (all-ns)
                        (map ns-name)))
 
 ;; Analyze all loaded namespaces matching a prefix
-(treemap/treemap! (->> (all-ns)
+(clj-compiler-view/treemap! (->> (all-ns)
                        (map ns-name)
                        (filter #(str/starts-with? (str %) "my.app."))))
 ```
@@ -39,7 +39,7 @@ Heavily inspired by [Jonathan Blow's code metrics viewer](https://youtu.be/IdpD5
 ### Programmatic Use
 
 ```clojure
-(require '[treemap.analyze :as analyze])
+(require '[clj-compiler-view.analyze :as analyze])
 
 ;; Get raw analysis data
 (def data (analyze/analyze-nses '[my.namespace]))
@@ -48,7 +48,7 @@ Heavily inspired by [Jonathan Blow's code metrics viewer](https://youtu.be/IdpD5
 (def tree (analyze/build-hierarchy data))
 
 ;; Render to HTML string (no browser)
-(def html (treemap/render-html tree :size :loc :color :max-depth-raw))
+(def html (clj-compiler-view/render-html tree :size :loc :color :max-depth-raw))
 ```
 
 ## Available Metrics
@@ -96,7 +96,7 @@ The info panel shows metrics on hover. Namespace cells show function counts; fun
 
 Some namespaces break `tools.analyzer.jvm` (including the analyzer itself, `clojure.spec.*`, `clojure.reflect`). These fall back to reader-based analysis with partial metrics (no expanded metrics, no unused detection).
 
-Check `@treemap.analyze/errors` for namespaces that failed analysis.
+Check `@clj-compiler-view.analyze/errors` for namespaces that failed analysis.
 
 ## Troubleshooting
 
@@ -105,15 +105,15 @@ Check `@treemap.analyze/errors` for namespaces that failed analysis.
 Protocol cache invalidation issue. Run:
 
 ```clojure
-(treemap.analyze/reset-analyzer!)
+(clj-compiler-view.analyze/reset-analyzer!)
 ```
 
 **Empty or missing metrics**
 
-Check `@treemap.analyze/errors` for analysis failures. Some namespaces cannot be analyzed; they fall back to reader-based metrics marked with `:failed? true`.
+Check `@clj-compiler-view.analyze/errors` for analysis failures. Some namespaces cannot be analyzed; they fall back to reader-based metrics marked with `:failed? true`.
 
 ## Dependencies
 
 - [tools.analyzer.jvm](https://github.com/clojure/tools.analyzer.jvm) - Clojure AST analysis
 - [jsonista](https://github.com/metosin/jsonista) - JSON serialization
-- [D3.js](https://d3js.org/) - Treemap visualization (loaded from CDN)
+- [D3.js](https://d3js.org/) - clj-compiler-view visualization (loaded from CDN)

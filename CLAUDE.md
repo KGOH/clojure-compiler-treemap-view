@@ -1,13 +1,13 @@
-# Treemap - Clojure Code Metrics Visualization
+# clj-compiler-view - Clojure Code Metrics Visualization
 
 Analyze Clojure namespaces and generate interactive D3.js treemap visualizations of code metrics.
 
 ## Quick Start
 
 ```clojure
-(require '[treemap.core :as treemap])
-(treemap/treemap! '[my.namespace])           ; opens browser
-(treemap/treemap! '[ns1 ns2] :size :loc :color :max-depth-expanded)
+(require '[clj-compiler-view.core :as clj-compiler-view])
+(clj-compiler-view/treemap! '[my.namespace])           ; opens browser
+(clj-compiler-view/treemap! '[ns1 ns2] :size :loc :color :max-depth-expanded)
 ```
 
 ## Architecture
@@ -19,9 +19,9 @@ analyze-ns -> analyze-nses -> build-hierarchy -> render-html -> open-html
 ```
 
 **Core files**:
-- `src/treemap/analyze.clj` - AST analysis via tools.analyzer.jvm, metrics extraction
-- `src/treemap/core.clj` - HTML generation, public API
-- `resources/treemap.{html,css,js}` - D3.js visualization
+- `src/clj-compiler-view/analyze.clj` - AST analysis via tools.analyzer.jvm, metrics extraction
+- `src/clj-compiler-view/core.clj` - HTML generation, public API
+- `resources/clj-compiler-view.{html,css,js}` - D3.js visualization
 
 ## Key Functions
 
@@ -87,7 +87,7 @@ Raw vs expanded: Threading macros like `->` appear flat in raw metrics but neste
 clj -X:test
 ```
 
-Test fixtures in `test/treemap/fixtures/` - namespaces with known characteristics for assertions.
+Test fixtures in `test/clj-compiler-view/fixtures/` - namespaces with known characteristics for assertions.
 
 ## Notes Directory
 
