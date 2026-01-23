@@ -3,26 +3,30 @@
 
    Requires the metrics-agent Java agent to be loaded via -javaagent flag.
 
-   This namespace provides a Clojure-friendly interface to the MetricsBridge
-   Java class, which receives captured def/defn forms from the compiler
-   instrumentation agent.
+   This namespace provides a Clojure-friendly interface to the Java agent,
+   which has two instrumentation modes:
+
+   1. Compiler Hook (MetricsBridge): captures def/defn forms as they compile
+   2. Class Loader (ClassLoadBridge): captures all classes as they load
 
    Usage:
-     ;; Start REPL with agent: clj -J-javaagent:metrics-agent/target/metrics-agent.jar
+     ;; Start REPL with agent (both modes by default)
+     clj -J-javaagent:metrics-agent/target/metrics-agent.jar
+
+     ;; Or specific modes
+     clj -J-javaagent:metrics-agent/target/metrics-agent.jar=compiler
+     clj -J-javaagent:metrics-agent/target/metrics-agent.jar=classloader
 
      (require '[clojure-compiler-treemap-view.agent :as agent])
 
-     ;; Clear any defs captured during startup
-     (agent/clear!)
-
-     ;; Load a namespace (this triggers compilation)
-     (require '[some.namespace] :reload)
-
-     ;; Get captured defs
+     ;; Compiler hook: captured defs
      (agent/get-captured-defs)
-     ;; => [{:op \"defn\" :name \"my-fn\" :ns \"some.namespace\" :line 5} ...]"
-  (:require [clojure.set :as set])
-  (:import [clojure.metrics MetricsBridge]))
+
+     ;; Class loader: runtime footprint
+     (agent/runtime-footprint)"
+  (:require [clojure.set :as set]
+            [clojure.string :as str])
+  (:import [clojure.metrics MetricsBridge ClassLoadBridge]))
 
 (defn agent-available?
   "Check if the metrics agent is loaded.
@@ -142,13 +146,154 @@
      :both both
      :line-mismatches (vec line-mismatches)}))
 
+;;; ==========================================================================
+;;; Class Loader Functions (Runtime Footprint)
+;;; ==========================================================================
+
+(defn classloader-available?
+  "Check if the class loader instrumentation is available."
+  []
+  (try
+    (Class/forName "clojure.metrics.ClassLoadBridge")
+    true
+    (catch ClassNotFoundException _
+      false)))
+
+(defn get-loaded-classes
+  "Return map of class-name -> bytecode-size for all captured classes.
+
+   Only includes classes that passed the filter (excludes JDK classes)."
+  []
+  (when (classloader-available?)
+    (into {} (ClassLoadBridge/getLoadedClasses))))
+
+(defn loaded-class-count
+  "Return the number of captured classes."
+  []
+  (if (classloader-available?)
+    (ClassLoadBridge/classCount)
+    0))
+
+(defn total-bytecode-size
+  "Return total bytecode size of all captured classes in bytes."
+  []
+  (if (classloader-available?)
+    (ClassLoadBridge/totalBytecodeSize)
+    0))
+
+(defn clear-loaded-classes!
+  "Clear all captured class data."
+  []
+  (when (classloader-available?)
+    (ClassLoadBridge/clear)))
+
+(defn clojure-class?
+  "Check if class name matches Clojure function pattern (namespace$fn).
+
+   Clojure compiles functions to classes with names like:
+     clojure.core$map
+     my.namespace$my_fn
+     my.namespace$handler$fn__1234 (anonymous)"
+  [class-name]
+  (and (string? class-name)
+       (str/includes? class-name "$")
+       ;; Exclude Java inner classes which use $$ or have numeric-only suffix
+       (not (str/includes? class-name "$$"))
+       ;; Must have something before the $
+       (not (str/starts-with? class-name "$"))))
+
+(defn parse-clojure-class
+  "Parse a Clojure class name into namespace and function name.
+
+   'my.namespace$my_fn' -> {:ns \"my.namespace\" :fn \"my-fn\"}
+   'my.namespace$handler$fn__1234' -> {:ns \"my.namespace\" :fn \"handler\" :anonymous? true}"
+  [class-name]
+  (when (clojure-class? class-name)
+    (let [[ns-part & fn-parts] (str/split class-name #"\$")
+          fn-part (first fn-parts)
+          ;; Convert underscores back to hyphens (Clojure munging)
+          fn-name (when fn-part (str/replace fn-part "_" "-"))
+          anonymous? (or (> (count fn-parts) 1)
+                        (and fn-name (re-matches #".*__\d+$" fn-name)))]
+      (when (and ns-part fn-name)
+        (cond-> {:ns ns-part
+                 :fn (str/replace fn-name #"__\d+$" "")}
+          anonymous? (assoc :anonymous? true))))))
+
+(defn runtime-footprint
+  "Get runtime footprint summary.
+
+   Returns a map with:
+     :total-classes   - Total number of captured classes
+     :total-bytes     - Total bytecode size
+     :total-mb        - Total bytecode size in MB
+     :clojure-classes - Number of Clojure function classes
+     :clojure-bytes   - Bytecode size of Clojure classes
+     :java-classes    - Number of non-Clojure classes
+     :java-bytes      - Bytecode size of non-Clojure classes"
+  []
+  (when (classloader-available?)
+    (let [classes (get-loaded-classes)
+          total-size (reduce + 0 (vals classes))
+          clj-classes (filter (fn [[k _]] (clojure-class? k)) classes)
+          java-classes (remove (fn [[k _]] (clojure-class? k)) classes)]
+      {:total-classes (count classes)
+       :total-bytes total-size
+       :total-mb (/ total-size 1024.0 1024.0)
+       :clojure-classes (count clj-classes)
+       :clojure-bytes (reduce + 0 (map second clj-classes))
+       :java-classes (count java-classes)
+       :java-bytes (reduce + 0 (map second java-classes))})))
+
+(defn classes-by-namespace
+  "Group loaded classes by namespace.
+
+   Returns a map of namespace -> [{:class \"...\" :fn \"...\" :size N} ...]"
+  []
+  (when (classloader-available?)
+    (let [classes (get-loaded-classes)]
+      (->> classes
+           (filter (fn [[k _]] (clojure-class? k)))
+           (map (fn [[class-name size]]
+                  (assoc (parse-clojure-class class-name)
+                         :class class-name
+                         :size size)))
+           (group-by :ns)))))
+
+(defn largest-classes
+  "Return the N largest classes by bytecode size.
+
+   Each entry is {:class \"...\" :size N :parsed {...}}"
+  ([] (largest-classes 20))
+  ([n]
+   (when (classloader-available?)
+     (->> (get-loaded-classes)
+          (map (fn [[class-name size]]
+                 {:class class-name
+                  :size size
+                  :parsed (parse-clojure-class class-name)}))
+          (sort-by :size >)
+          (take n)))))
+
 (comment
 
+  ;; Compiler hook examples
   (def captured (get-captured-defs))
 
   (->> captured
        (map :ns)
        distinct
        sort)
+
+  ;; Class loader examples
+  (runtime-footprint)
+
+  (largest-classes 10)
+
+  (->> (classes-by-namespace)
+       (map (fn [[ns classes]]
+              [ns (reduce + 0 (map :size classes))]))
+       (sort-by second >)
+       (take 10))
 
   ,)

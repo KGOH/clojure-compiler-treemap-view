@@ -11,12 +11,17 @@ import java.lang.instrument.Instrumentation;
 import java.security.ProtectionDomain;
 
 /**
- * Java agent entry point for Clojure compiler instrumentation.
+ * Java agent entry point for Clojure metrics instrumentation.
  *
- * This agent hooks into clojure.lang.Compiler.analyzeSeq to capture
- * def/defn forms as they are compiled.
+ * Supports two instrumentation modes:
+ * - Compiler Hook: captures def/defn forms as they compile (source-based)
+ * - Class Loader: captures all classes as they load (bytecode-based)
  *
- * Usage: java -javaagent:metrics-agent.jar ...
+ * Usage:
+ *   java -javaagent:metrics-agent.jar              # both enabled (default)
+ *   java -javaagent:metrics-agent.jar=compiler     # only compiler hook
+ *   java -javaagent:metrics-agent.jar=classloader  # only class loader
+ *   java -javaagent:metrics-agent.jar=compiler,classloader  # explicit both
  */
 public class MetricsAgent {
 
@@ -31,8 +36,40 @@ public class MetricsAgent {
         }
         installed = true;
 
-        if (VERBOSE) System.out.println("[MetricsAgent] Installing Clojure compiler instrumentation...");
+        // Parse feature flags
+        boolean enableCompiler = true;
+        boolean enableClassLoader = true;
 
+        if (agentArgs != null && !agentArgs.isEmpty()) {
+            // If args specified, only enable what's explicitly listed
+            enableCompiler = agentArgs.contains("compiler");
+            enableClassLoader = agentArgs.contains("classloader");
+        }
+
+        if (VERBOSE) {
+            System.out.println("[MetricsAgent] Installing instrumentation...");
+            System.out.println("[MetricsAgent]   Compiler hook: " + enableCompiler);
+            System.out.println("[MetricsAgent]   Class loader: " + enableClassLoader);
+        }
+
+        // Install Class Loader transformer
+        if (enableClassLoader) {
+            inst.addTransformer(new ClassLoaderTransformer(), false);
+            if (VERBOSE) System.out.println("[MetricsAgent] Class loader transformer installed");
+        }
+
+        // Install Compiler hook via ByteBuddy
+        if (enableCompiler) {
+            installCompilerHook(inst);
+        }
+
+        if (VERBOSE) System.out.println("[MetricsAgent] Installation complete");
+    }
+
+    /**
+     * Install ByteBuddy advice on Compiler.analyzeSeq
+     */
+    private static void installCompilerHook(Instrumentation inst) {
         new AgentBuilder.Default()
             .disableClassFormatChanges()
             .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
@@ -40,7 +77,6 @@ public class MetricsAgent {
                 @Override
                 public void onDiscovery(String typeName, ClassLoader classLoader,
                                         JavaModule module, boolean loaded) {
-                    // Only log Clojure compiler discovery in verbose mode
                     if (VERBOSE && typeName.equals("clojure.lang.Compiler")) {
                         System.out.println("[MetricsAgent] Discovered: " + typeName + " (loaded=" + loaded + ")");
                     }
@@ -79,7 +115,7 @@ public class MetricsAgent {
                         .and(ElementMatchers.isStatic()))))
             .installOn(inst);
 
-        if (VERBOSE) System.out.println("[MetricsAgent] Installation complete");
+        if (VERBOSE) System.out.println("[MetricsAgent] Compiler hook installed");
     }
 
     /**
