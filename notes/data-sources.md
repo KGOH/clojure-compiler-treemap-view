@@ -1,6 +1,6 @@
 # Data Sources for Code Metrics
 
-Three complementary approaches to capture code metrics, each with different visibility.
+Two data sources for capturing code metrics, each with different visibility and trust levels.
 
 ## Trust Model: Source vs Bytecode
 
@@ -27,76 +27,46 @@ For 99.9% of legitimate libraries this is fine. But for security-sensitive analy
 
 ---
 
-## Two Views: Code Quality vs Runtime Footprint
+## UI Design: Source Picker
 
-These answer different questions and should be separate views in the UI.
-
-### View 1: Code Quality (Source-based)
-
-**Question:** "How complex is this code?"
-
-**Data sources:** Compiler Hook, Runtime Vars, tools.analyzer
-
-**Metrics:**
-- LOC (lines of code)
-- Expression count (raw and macro-expanded)
-- Nesting depth
-- Cyclomatic complexity (future)
-- Unused vars
-
-**Trust:** Relies on source files. Shows what code *claims* to be.
-
-### View 2: Runtime Footprint (Bytecode-based)
-
-**Question:** "What am I actually shipping to production?"
-
-**Data source:** Class Loader instrumentation
-
-**Metrics:**
-- Bytecode size (bytes)
-- Class count
-- Load order/timing
-- Package breakdown
-
-**Trust:** Ground truth. Shows what *actually* executes.
-
----
-
-## UI Design: Data Source Picker
-
-Each view has a picker to select data source. Each source has its own applicable metrics.
+Single picker for data source. Available metrics depend on source type.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  View: [Code Quality ▼]    Source: [Compiled This Session ▼]│
+│  Source: [Compiler Hook ▼]                                  │
+│          ├── Compiler Hook      → LOC, depth, expressions   │
+│          └── Class Loader       → bytecode size, class count│
 ├─────────────────────────────────────────────────────────────┤
 │  Size by: [LOC ▼]  Color by: [Max Depth ▼]                  │
 │                                                             │
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │                    TREEMAP                           │   │
 │  │                                                      │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### Code Quality View - Source Options
+### Source: Compiler Hook (Source-based)
 
-| Source | Coverage | Speed | Use when |
-|--------|----------|-------|----------|
-| Compiled This Session | Your code only | Instant | Developing |
-| All Loaded Clojure | Everything with source | Fast | Reviewing deps |
-| Specific Namespace | One ns deep-dive | Fast | Focused analysis |
+**Question:** "How complex is the code I'm compiling?"
 
-**Metrics available:** LOC, expressions, depth, unused
+**Metrics available:** LOC, expressions (raw/expanded), nesting depth, unused vars
 
-### Runtime Footprint View - Source Options
+**Trust:** Source-based. Shows what code *claims* to be.
 
-| Source | Coverage | Speed | Use when |
-|--------|----------|-------|----------|
-| All Classes | Full JVM | Medium | Uberjar audit |
-| Clojure Only | Clojure fns | Fast | Clojure bloat |
-| Java Only | Java deps | Medium | AWS SDK problem |
-| Exclude JDK | No java.*, sun.* | Medium | App deps only |
+### Source: Class Loader (Bytecode-based)
+
+**Question:** "What am I actually shipping to production?"
 
 **Metrics available:** Bytecode size, class count
+
+**Filter options:**
+- All Classes (full JVM)
+- Clojure Only (namespace$fn pattern)
+- Java Only (exclude Clojure)
+- Exclude JDK (no java.*, sun.*)
+
+**Trust:** Ground truth. Shows what *actually* executes.
 
 ---
 
@@ -121,38 +91,9 @@ Each view has a picker to select data source. Each source has its own applicable
 
 **Use case:** "What code am I writing/compiling?"
 
-**View:** Code Quality
-
 ---
 
-## 2. Runtime Var Enumeration (Not yet implemented)
-
-**What it captures:** All vars currently loaded in the JVM, using metadata.
-
-**Method:** Iterate `(all-ns)` → `(ns-interns ns)` → `(meta var)`
-
-**Data available:**
-- def name, namespace, line number, file path
-- arglists, docstrings
-- Works for AOT code (metadata preserved in .clj files bundled with JARs)
-
-**Visibility:**
-| Code Type | Visible? |
-|-----------|----------|
-| Your application code | Yes |
-| Dependencies (source) | Yes |
-| AOT-compiled libs | Yes |
-| clojure.core | Yes |
-
-**Use case:** "What Clojure code is in my runtime?"
-
-**Limitation:** Only sees Clojure vars, not Java classes. Trusts bundled source.
-
-**View:** Code Quality
-
----
-
-## 3. Class Loader Instrumentation (Not yet implemented)
+## 2. Class Loader Instrumentation (Not yet implemented)
 
 **What it captures:** All JVM classes as they are loaded.
 
@@ -178,37 +119,45 @@ Each view has a picker to select data source. Each source has its own applicable
 
 **Note:** This is where AWS SDK bloat would be visible - hundreds of Java classes.
 
-**View:** Runtime Footprint
+---
+
+## Omitted: Runtime Var Enumeration
+
+**Why omitted:** It's a fallback approach that doesn't capture what's actually compiled or loaded.
+
+- Iterates `(all-ns)` → `(ns-interns ns)` → `(meta var)`
+- Gets `:file` and `:line` from var metadata
+- But this just points to bundled .clj files - an index, not actual compilation/loading data
+- To get metrics, you'd still need to read and analyze those .clj files
+- Same trust assumption as Compiler Hook, but indirect
+
+**If needed later:** Could serve as a way to extend coverage to AOT Clojure (clojure.core) by re-analyzing bundled source files. But this is a "claimed source" approach, not a direct observation of what was compiled/loaded.
 
 ---
 
 ## Comparison Matrix
 
-| Aspect | Compiler Hook | Runtime Vars | Class Loader |
-|--------|--------------|--------------|--------------|
-| Clojure source line | Yes | Yes | No |
-| Clojure AOT code | No | Yes | Yes |
-| Java libraries | No | No | Yes |
-| Bytecode size | No | No | Yes |
-| Compile-time only | Yes | No | No |
-| Real-time capture | Yes | No | Yes |
-| Trust level | Source | Source | Bytecode |
-| View | Code Quality | Code Quality | Runtime Footprint |
+| Aspect | Compiler Hook | Class Loader |
+|--------|--------------|--------------|
+| Clojure source line | Yes | No |
+| Clojure AOT code | No | Yes |
+| Java libraries | No | Yes |
+| Bytecode size | No | Yes |
+| Code complexity metrics | Yes | No |
+| Real-time capture | Yes | Yes |
+| Trust level | Source | Bytecode |
 
 ---
 
 ## Implementation Priority
 
 1. **Compiler hook** (done) - your code's quality metrics
-2. **Var enumeration** (next) - cheap, no agent, extends to clojure.core
-3. **Class loader** (later) - only if "why is my uberjar 200MB" matters
+2. **Class loader** (next) - runtime footprint, bytecode size
 
 ---
 
 ## Questions to Resolve
 
-1. ~~How to present three data sources in one treemap UI?~~ → Two views with picker
-2. For class loader: filter JDK classes? (java.*, javax.*, sun.*) → Yes, as option
-3. How to correlate Clojure class names (`ns$fn`) back to source? → Naming convention parse
-4. Memory overhead of class loader instrumentation?
-5. Should bytecode size be available in Code Quality view for correlation?
+1. For class loader: filter JDK classes? (java.*, javax.*, sun.*) → Yes, as option
+2. How to correlate Clojure class names (`ns$fn`) back to source? → Naming convention parse
+3. Memory overhead of class loader instrumentation?
