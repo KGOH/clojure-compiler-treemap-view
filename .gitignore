@@ -1,0 +1,22 @@
+# Clojure
+.cpcache/
+.nrepl-port
+*.jar
+*.class
+target/
+
+# Editor
+.idea/
+*.iml
+.vscode/
+.calva/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local
+.env
+.env.local

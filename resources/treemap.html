@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{TITLE}}</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+{{CSS}}
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <div class="breadcrumb" id="breadcrumb"></div>
+    <div class="controls-right">
+      <div class="control-group">
+        <label for="size-select">Size:</label>
+        <select id="size-select"></select>
+      </div>
+      <div class="control-group">
+        <label for="color-select">Color:</label>
+        <select id="color-select"></select>
+      </div>
+      <div class="control-group">
+        <input type="checkbox" id="show-labels">
+        <label for="show-labels">Show names</label>
+      </div>
+      <div class="search-container">
+        <input type="text" id="search-input" placeholder="Search ns/symbol...">
+        <div class="suggestions" id="suggestions"></div>
+      </div>
+    </div>
+  </div>
+  <div class="info-panel" id="info-panel"></div>
+  <div class="treemap-container">
+    <div id="treemap"></div>
+  </div>
+
+  <script>
+{{JS}}
+  </script>
+</body>
+</html>

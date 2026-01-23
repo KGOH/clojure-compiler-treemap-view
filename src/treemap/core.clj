@@ -1,0 +1,91 @@
+(ns treemap.core
+  "HTML generation and public API for code metrics treemap."
+  (:require [treemap.analyze :as analyze]
+            [jsonista.core :as json]
+            [clojure.java.io :as io]
+            [clojure.java.browse :as browse]
+            [clojure.string :as str]))
+
+(def ^:private metrics-options
+  "Available metrics for size and color dropdowns."
+  [{:key :loc :label "Lines of Code"}
+   {:key :expressions-raw :label "Expressions (Raw)"}
+   {:key :expressions-expanded :label "Expressions (Expanded)"}
+   {:key :max-depth-raw :label "Max Depth (Raw)"}
+   {:key :max-depth-expanded :label "Max Depth (Expanded)"}])
+
+(defn metrics-dropdown-options
+  "Return list of available metrics for dropdowns."
+  []
+  metrics-options)
+
+(defn- slurp-resource
+  "Slurp a resource file from the resources directory."
+  [filename]
+  (slurp (io/resource filename)))
+
+(defn render-html
+  "Generate complete HTML string for treemap visualization."
+  [tree-data & {:keys [size color title]
+                :or {size :expressions-raw
+                     color :max-depth-raw
+                     title "Code Metrics Treemap"}}]
+  (let [data-json (json/write-value-as-string tree-data)
+        options-json (json/write-value-as-string (mapv #(assoc % :key (name (:key %))) metrics-options))
+        html-template (slurp-resource "treemap.html")
+        css (slurp-resource "treemap.css")
+        js (slurp-resource "treemap.js")]
+    (-> html-template
+        (str/replace "{{TITLE}}" title)
+        (str/replace "{{CSS}}" css)
+        (str/replace "{{JS}}" js)
+        (str/replace "{{DATA}}" data-json)
+        (str/replace "{{OPTIONS}}" options-json)
+        (str/replace "{{DEFAULT_SIZE}}" (name size))
+        (str/replace "{{DEFAULT_COLOR}}" (name color)))))
+
+(defn open-html
+  "Write HTML to temp file and open in browser. Returns file path."
+  [html]
+  (let [f (java.io.File/createTempFile "treemap-" ".html")]
+    (.deleteOnExit f)
+    (spit f html)
+    (browse/browse-url (str "file://" (.getAbsolutePath f)))
+    (.getAbsolutePath f)))
+
+(defn treemap!
+  "Analyze namespaces and open treemap visualization.
+   Convenience function combining analyze -> build-hierarchy -> render-html -> open.
+
+   Options:
+     :size  - Metric for cell size (default: :expressions-raw)
+     :color - Metric for cell color (default: :max-depth-raw)
+
+   Available metrics:
+     :loc, :expressions-raw, :expressions-expanded, :max-depth-raw, :max-depth-expanded"
+  [ns-syms & {:keys [size color]
+              :or {size :expressions-raw
+                   color :max-depth-raw}}]
+  (-> ns-syms
+      analyze/analyze-nses
+      analyze/build-hierarchy
+      (render-html :size size :color color)
+      open-html))
+
+
+(comment
+  (def nses
+    (->> (all-ns)
+         (map ns-name)))
+
+  (def analyzed (analyze/analyze-nses nses))
+
+  analyze/errors
+  (->> @analyze/errors (map :ns) distinct)
+  #_(analyze/clear-errors!)
+
+  (def tree (analyze/build-hierarchy analyzed))
+
+  (open-html (render-html tree :size :expressions-raw :color :max-depth-raw))
+
+  ,)
