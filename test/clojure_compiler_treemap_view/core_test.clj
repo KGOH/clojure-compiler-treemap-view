@@ -1,14 +1,14 @@
-(ns clj-compiler-view.core-test
+(ns clojure-compiler-treemap-view.core-test
   (:require [clojure.test :refer [deftest testing is]]
-            [clj-compiler-view.core :as core]
-            [clj-compiler-view.analyze :as analyze]
+            [clojure-compiler-treemap-view.core :as core]
+            [clojure-compiler-treemap-view.analyze :as analyze]
             [clojure.string :as str]))
 
 ;; Ensure fixture namespaces are loaded
-(require 'clj-compiler-view.fixtures.alpha
-         'clj-compiler-view.fixtures.alpha.utils
-         'clj-compiler-view.fixtures.alpha.handlers
-         'clj-compiler-view.fixtures.beta)
+(require 'clojure-compiler-treemap-view.fixtures.alpha
+         'clojure-compiler-treemap-view.fixtures.alpha.utils
+         'clojure-compiler-treemap-view.fixtures.alpha.handlers
+         'clojure-compiler-treemap-view.fixtures.beta)
 
 (deftest test-build-hierarchy
   (testing "builds correct tree structure"
@@ -38,16 +38,16 @@
 
 (deftest test-hierarchy-with-fixtures
   (testing "groups fixture namespaces correctly"
-    (let [fn-data (analyze/analyze-nses '[clj-compiler-view.fixtures.alpha
-                                          clj-compiler-view.fixtures.alpha.utils
-                                          clj-compiler-view.fixtures.alpha.handlers
-                                          clj-compiler-view.fixtures.beta])
+    (let [fn-data (analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha
+                                          clojure-compiler-treemap-view.fixtures.alpha.utils
+                                          clojure-compiler-treemap-view.fixtures.alpha.handlers
+                                          clojure-compiler-treemap-view.fixtures.beta])
           tree (analyze/build-hierarchy fn-data)
-          ccv-node (first (filter #(= "clj-compiler-view" (:name %)) (:children tree)))]
-      (is ccv-node "should have clj-compiler-view top-level")
+          ccv-node (first (filter #(= "clojure-compiler-treemap-view" (:name %)) (:children tree)))]
+      (is ccv-node "should have clojure-compiler-treemap-view top-level")
 
       (let [fixtures (first (filter #(= "fixtures" (:name %)) (:children ccv-node)))]
-        (is fixtures "should have fixtures under clj-compiler-view")
+        (is fixtures "should have fixtures under clojure-compiler-treemap-view")
 
         ;; Check alpha and beta are siblings under fixtures
         (let [alpha (first (filter #(= "alpha" (:name %)) (:children fixtures)))
@@ -73,7 +73,7 @@
 
 (deftest test-render-html-generates-valid-output
   (testing "render-html generates valid HTML"
-    (let [fn-data (analyze/analyze-nses '[clj-compiler-view.fixtures.alpha])
+    (let [fn-data (analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha])
           tree (analyze/build-hierarchy fn-data)
           content (core/render-html tree)]
       (is (str/includes? content "<!DOCTYPE html"))
@@ -84,7 +84,7 @@
 
 (deftest test-render-html-with-options
   (testing "render-html respects options"
-    (let [fn-data (analyze/analyze-nses '[clj-compiler-view.fixtures.alpha])
+    (let [fn-data (analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha])
           tree (analyze/build-hierarchy fn-data)
           content (core/render-html tree :size :loc :color :max-depth-expanded)]
       (is (str/includes? content "const defaultSize = 'loc'"))

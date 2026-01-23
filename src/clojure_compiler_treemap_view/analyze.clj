@@ -1,4 +1,4 @@
-(ns clj-compiler-view.analyze
+(ns clojure-compiler-treemap-view.analyze
   "AST walking and metrics extraction for code visualization."
   (:require [clojure.tools.analyzer.jvm :as ana.jvm]
             [clojure.tools.analyzer.ast :as ast]

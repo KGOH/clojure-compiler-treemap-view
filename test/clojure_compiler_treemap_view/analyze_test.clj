@@ -1,21 +1,21 @@
-(ns clj-compiler-view.analyze-test
+(ns clojure-compiler-treemap-view.analyze-test
   (:require [clojure.test :refer [deftest testing is]]
-            [clj-compiler-view.analyze :as analyze]
+            [clojure-compiler-treemap-view.analyze :as analyze]
             [clojure.tools.analyzer.jvm :as ana.jvm]))
 
 ;; Ensure fixture namespaces are loaded
-(require 'clj-compiler-view.fixtures.alpha
-         'clj-compiler-view.fixtures.alpha.utils
-         'clj-compiler-view.fixtures.alpha.handlers
-         'clj-compiler-view.fixtures.beta
-         'clj-compiler-view.fixtures.gamma
+(require 'clojure-compiler-treemap-view.fixtures.alpha
+         'clojure-compiler-treemap-view.fixtures.alpha.utils
+         'clojure-compiler-treemap-view.fixtures.alpha.handlers
+         'clojure-compiler-treemap-view.fixtures.beta
+         'clojure-compiler-treemap-view.fixtures.gamma
          'clojure.spec.alpha)
 
 (deftest test-ns->path
   (testing "splits namespace string into segments"
     (is (= ["foo" "bar" "baz"] (analyze/ns->path "foo.bar.baz")))
     (is (= ["single"] (analyze/ns->path "single")))
-    (is (= ["clj-compiler-view" "fixtures" "alpha"] (analyze/ns->path "clj-compiler-view.fixtures.alpha")))))
+    (is (= ["clojure-compiler-treemap-view" "fixtures" "alpha"] (analyze/ns->path "clojure-compiler-treemap-view.fixtures.alpha")))))
 
 ;; ============================================================================
 ;; S-Expression Counter Tests
@@ -51,7 +51,7 @@
 
 (deftest test-analyze-ns
   (testing "returns function data for namespace with all metrics"
-    (let [fn-data (:analyzed (analyze/analyze-ns 'clj-compiler-view.fixtures.alpha))]
+    (let [fn-data (:analyzed (analyze/analyze-ns 'clojure-compiler-treemap-view.fixtures.alpha))]
       (is (>= (count fn-data) 3))
       (is (every? :name fn-data))
       (is (every? :ns fn-data))
@@ -64,7 +64,7 @@
 
 (deftest test-raw-vs-expanded-metrics
   (testing "raw metrics are less than expanded for threading macros"
-    (let [fn-data (:analyzed (analyze/analyze-ns 'clj-compiler-view.fixtures.gamma))
+    (let [fn-data (:analyzed (analyze/analyze-ns 'clojure-compiler-treemap-view.fixtures.gamma))
           threading (first (filter #(= "threading-simple" (:name %)) fn-data))]
       ;; Raw depth should be less (threading is flat in source)
       (is (< (get-in threading [:metrics :max-depth-raw])
@@ -73,24 +73,24 @@
 (deftest test-find-unused-vars
   (testing "identifies unused functions"
     (let [all-asts (mapcat #(try (ana.jvm/analyze-ns %) (catch Exception _ []))
-                           '[clj-compiler-view.fixtures.alpha
-                             clj-compiler-view.fixtures.alpha.utils
-                             clj-compiler-view.fixtures.alpha.handlers
-                             clj-compiler-view.fixtures.beta])
+                           '[clojure-compiler-treemap-view.fixtures.alpha
+                             clojure-compiler-treemap-view.fixtures.alpha.utils
+                             clojure-compiler-treemap-view.fixtures.alpha.handlers
+                             clojure-compiler-treemap-view.fixtures.beta])
           unused-vars (analyze/find-unused-vars all-asts)
           unused-strs (set (map str unused-vars))]
       ;; unused-fn in alpha is never referenced
-      (is (contains? unused-strs "clj-compiler-view.fixtures.alpha/unused-fn"))
+      (is (contains? unused-strs "clojure-compiler-treemap-view.fixtures.alpha/unused-fn"))
       ;; helper and format-output ARE referenced in handlers
-      (is (not (contains? unused-strs "clj-compiler-view.fixtures.alpha.utils/helper")))
-      (is (not (contains? unused-strs "clj-compiler-view.fixtures.alpha.utils/format-output"))))))
+      (is (not (contains? unused-strs "clojure-compiler-treemap-view.fixtures.alpha.utils/helper")))
+      (is (not (contains? unused-strs "clojure-compiler-treemap-view.fixtures.alpha.utils/format-output"))))))
 
 (deftest test-analyze-nses
   (testing "adds unused? flag to metrics"
-    (let [fn-data (analyze/analyze-nses '[clj-compiler-view.fixtures.alpha
-                                          clj-compiler-view.fixtures.alpha.utils
-                                          clj-compiler-view.fixtures.alpha.handlers
-                                          clj-compiler-view.fixtures.beta])
+    (let [fn-data (analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha
+                                          clojure-compiler-treemap-view.fixtures.alpha.utils
+                                          clojure-compiler-treemap-view.fixtures.alpha.handlers
+                                          clojure-compiler-treemap-view.fixtures.beta])
           by-name (group-by :name fn-data)
           unused (first (get by-name "unused-fn"))
           helper (first (get by-name "helper"))]
@@ -99,14 +99,14 @@
 
 (deftest test-def-metrics
   (testing "extracts all metrics from def node"
-    (let [asts (ana.jvm/analyze-ns 'clj-compiler-view.fixtures.alpha)
+    (let [asts (ana.jvm/analyze-ns 'clojure-compiler-treemap-view.fixtures.alpha)
           simple-def (->> asts
                           (filter #(= :def (:op %)))
                           (filter #(= 'simple-fn (:name %)))
                           first)
           metrics (analyze/def-metrics simple-def)]
       (is (= "simple-fn" (:name metrics)))
-      (is (= "clj-compiler-view.fixtures.alpha" (:ns metrics)))
+      (is (= "clojure-compiler-treemap-view.fixtures.alpha" (:ns metrics)))
       (is (number? (get-in metrics [:metrics :loc])))
       (is (number? (get-in metrics [:metrics :expressions-raw])))
       (is (number? (get-in metrics [:metrics :expressions-expanded])))

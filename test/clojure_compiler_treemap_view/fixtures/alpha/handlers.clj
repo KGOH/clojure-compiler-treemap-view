@@ -1,5 +1,5 @@
-(ns clj-compiler-view.fixtures.alpha.handlers
-  (:require [clj-compiler-view.fixtures.alpha.utils :as utils]))
+(ns clojure-compiler-treemap-view.fixtures.alpha.handlers
+  (:require [clojure-compiler-treemap-view.fixtures.alpha.utils :as utils]))
 
 (defn process
   "Process with nested conditionals - tests if-depth metric."

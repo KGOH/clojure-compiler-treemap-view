@@ -1,4 +1,4 @@
-(ns clj-compiler-view.fixtures.alpha)
+(ns clojure-compiler-treemap-view.fixtures.alpha)
 
 (defn simple-fn
   "A simple function for testing basic metrics."
