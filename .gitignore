@@ -20,3 +20,7 @@ Thumbs.db
 # Local
 .env
 .env.local
+
+# Maven (metrics-agent)
+metrics-agent/target/
+metrics-agent/dependency-reduced-pom.xml
