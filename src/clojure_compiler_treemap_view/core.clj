@@ -76,11 +76,7 @@
 (comment
   (def analyzed (analyze/analyze-captured))
 
-  (def nses
-    (->> (all-ns)
-         (map ns-name)))
-
-  (def analyzed (analyze/analyze-nses nses))
+  #_(def analyzed (analyze/analyze-nses (->> (all-ns) (map ns-name))))
 
   analyze/errors
   (->> @analyze/errors (map :ns) distinct)
