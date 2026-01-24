@@ -53,13 +53,16 @@
         (str/replace "{{DEFAULT_COLOR}}" (name color)))))
 
 (defn open-html
-  "Write HTML to temp file and open in browser. Returns file path."
+  "Write HTML and D3.js to temp directory and open in browser. Returns file path."
   [html]
-  (let [f (java.io.File/createTempFile "treemap-" ".html")]
-    (.deleteOnExit f)
-    (spit f html)
-    (browse/browse-url (str "file://" (.getAbsolutePath f)))
-    (.getAbsolutePath f)))
+  (let [html-file (java.io.File/createTempFile "treemap-" ".html")
+        d3-file (java.io.File. (.getParent html-file) "d3.v7.min.js")]
+    (.deleteOnExit html-file)
+    (.deleteOnExit d3-file)
+    (spit d3-file (slurp-resource "d3.v7.min.js"))
+    (spit html-file html)
+    (browse/browse-url (str "file://" (.getAbsolutePath html-file)))
+    (.getAbsolutePath html-file)))
 
 (defn treemap!
   "Analyze namespaces and open treemap visualization.
