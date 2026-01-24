@@ -38,3 +38,20 @@ window.addEventListener('resize', () => {
   resizeTimeout = setTimeout(render, 100);
 });
 ```
+
+### 4. Thread safety: document single-threaded requirement
+**Files:** `analyze.clj`, `agent.clj`
+
+The `with-capture` macro clears/drains global buffers (`MetricsBridge.BUFFER`, `VarRefBridge.REFERENCES`). Concurrent calls corrupt each other's data. This is a REPL tool so concurrent analysis is unlikely, but should be documented.
+
+**Solution:** Add docstring warning to `analyze-ns`, `analyze-nses`, and `with-capture` that analysis is not thread-safe.
+
+### 5. Unbounded buffer growth
+**Files:** `MetricsBridge.java`, `VarRefBridge.java`
+
+Capture buffers grow indefinitely during REPL usage. If user never drains (never calls analyze functions), memory grows.
+
+**Options:**
+- Add max capacity with eviction (complex)
+- Add size warning when buffer exceeds threshold (simple)
+- Document that `clear!` should be called periodically in long sessions
