@@ -38,10 +38,32 @@
     (catch ClassNotFoundException _
       false)))
 
+(defn- extract-def-info
+  "Extract def info from captured form data.
+   Java hook provides: form, phase, ns, compiler-line
+   We extract: op, name, line, end-line from the form."
+  [raw-capture]
+  (let [m (into {} (for [[k v] raw-capture] [(keyword k) v]))
+        form (:form m)
+        form-meta (meta form)
+        name-sym (second form)]
+    {:form form
+     :phase (:phase m)
+     :ns (:ns m)
+     :op (str (first form))
+     :name (str name-sym)
+     :line (or (:line form-meta)
+               (:line (meta name-sym))
+               (:compiler-line m))
+     :end-line (or (:end-line form-meta)
+                   (:end-line (meta name-sym)))}))
+
 (defn get-captured-defs
   "Drain and return all captured def forms from the agent buffer.
 
    Returns a vector of maps, each containing:
+     :form     - The captured form (Clojure data structure)
+     :phase    - \"raw\" (pre-expansion) or \"expanded\" (post-expansion)
      :op       - The def type (\"def\", \"defn\", \"defn-\", \"defmacro\", \"defmulti\")
      :name     - The var name (string)
      :ns       - The namespace (string)
@@ -51,20 +73,14 @@
    This clears the buffer - subsequent calls return only newly captured defs."
   []
   (when (agent-available?)
-    (->> (MetricsBridge/drainBuffer)
-         (mapv (fn [m]
-                 (into {} (for [[k v] m]
-                            [(keyword k) v])))))))
+    (mapv extract-def-info (MetricsBridge/drainBuffer))))
 
 (defn peek-captured-defs
   "Peek at captured def forms without clearing the buffer.
    Returns the same format as get-captured-defs."
   []
   (when (agent-available?)
-    (->> (MetricsBridge/peekBuffer)
-         (mapv (fn [m]
-                 (into {} (for [[k v] m]
-                            [(keyword k) v])))))))
+    (mapv extract-def-info (MetricsBridge/peekBuffer))))
 
 (defn buffer-size
   "Return the number of captured defs waiting in the buffer."
