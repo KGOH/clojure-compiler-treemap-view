@@ -29,6 +29,9 @@ public class MacroexpandUnifiedAdvice {
     /** Store compiler line at entry (thread-bound, may change) */
     public static final ThreadLocal<Integer> ENTRY_LINE = new ThreadLocal<>();
 
+    /** Debug flag - set via -Dclojure.metrics.debug=true */
+    public static final boolean DEBUG = Boolean.getBoolean("clojure.metrics.debug");
+
     /**
      * @return 0=skip, 1=decrement only, 2=decrement and capture
      */
@@ -122,7 +125,10 @@ public class MacroexpandUnifiedAdvice {
 
             MetricsBridge.capture(info);
         } catch (Exception e) {
-            // Silently ignore
+            if (DEBUG) {
+                System.err.println("[metrics-agent] capture() failed: " + e.getMessage());
+                e.printStackTrace(System.err);
+            }
         }
     }
 
@@ -136,7 +142,12 @@ public class MacroexpandUnifiedAdvice {
                 Object name = ns.getClass().getMethod("getName").invoke(ns);
                 if (name != null) return name.toString();
             }
-        } catch (Exception e) {}
+        } catch (Exception e) {
+            if (DEBUG) {
+                System.err.println("[metrics-agent] getCurrentNamespace() failed: " + e.getMessage());
+                e.printStackTrace(System.err);
+            }
+        }
         return "user";
     }
 
@@ -152,7 +163,12 @@ public class MacroexpandUnifiedAdvice {
                 int line = ((Number) value).intValue();
                 if (line > 0) return line;
             }
-        } catch (Exception e) {}
+        } catch (Exception e) {
+            if (DEBUG) {
+                System.err.println("[metrics-agent] getCompilerLine() failed: " + e.getMessage());
+                e.printStackTrace(System.err);
+            }
+        }
         return null;
     }
 }
