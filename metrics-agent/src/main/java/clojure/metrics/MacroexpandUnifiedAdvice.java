@@ -37,6 +37,9 @@ public class MacroexpandUnifiedAdvice {
      */
     @Advice.OnMethodEnter
     public static int onEnter(@Advice.Argument(0) Object form) {
+        // Run self-test on first compilation (verifies reflection works)
+        ReflectionSelfTest.ensureTested();
+
         if (form == null) return 0;
 
         // Only track ISeq forms
