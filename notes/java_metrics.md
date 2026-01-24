@@ -167,8 +167,7 @@ Sum bytecode of reachable classes = "Java weight" of that function.
 ;; Clojure function with Java weight
 {:name "upload"
  :ns "my.app"
- :metrics {:loc 5
-           :expressions-raw 12
+ :metrics {:expressions-raw 12
            ;; Java metrics (from agent)
            :java-classes-loaded 47
            :java-weight-bytes 2340000

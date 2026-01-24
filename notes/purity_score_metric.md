@@ -1,5 +1,7 @@
 # Purity Score Metric
 
+> **Note:** This research was written for tools.analyzer AST. Needs adaptation for compiler hooks (working with raw/expanded s-expressions instead of AST nodes).
+
 Research notes for adding a purity/side-effect metric to the treemap visualization.
 
 ## Goal

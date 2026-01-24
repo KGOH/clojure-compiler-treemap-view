@@ -1,5 +1,7 @@
 # Call Locality Metrics
 
+> **Note:** This research was written for tools.analyzer AST. Needs adaptation for compiler hooks (extracting var refs from s-expressions instead of AST nodes).
+
 Research notes for adding call locality metrics to the treemap visualization.
 
 ## Goal

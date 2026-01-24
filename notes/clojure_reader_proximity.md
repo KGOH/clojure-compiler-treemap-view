@@ -91,15 +91,15 @@ public class ExpansionBridge {
 | **Which macros fired** | ❌ No | ✅ Yes |
 | True compilation errors | ❌ Shadow | ✅ Real |
 
-## Verdict for Current Metrics
+## Verdict: Agent Approach Adopted
 
-For treemap metrics (expression counts, depth), **tools.analyzer is sufficient**. The expanded form is what actually executes - a `(for ...)` expanding to 50 ops means the function really does 50 ops.
+We implemented the Java agent approach. Benefits over tools.analyzer:
+- Direct access to real compilation pipeline
+- No skip-list workarounds for problematic namespaces
+- VarExpr hooks for accurate unused var detection
+- ClassLoadBridge for bytecode size metrics
 
-The Java agent becomes valuable when we want:
-- Macro expansion ratios (code inflation metric)
-- Tracking which macros expanded
-- True compilation tracing/profiling
-- **Java dependency metrics** (see separate note)
+The agent hooks `Compiler.macroexpand` (enter=raw, exit=expanded) and `VarExpr`/`TheVarExpr` constructors.
 
 ## Key Clojure Compiler Entry Points
 

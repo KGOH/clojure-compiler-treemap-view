@@ -13,7 +13,6 @@ Two data sources for capturing code metrics, each with different visibility and 
 
 **The "coincidence" everyone trusts:** AOT-compiled libraries bundle both `.class` (bytecode) and `.clj` (source) files. All source-based tools assume these match:
 
-- `tools.analyzer.jvm` - reads .clj, assumes it matches .class
 - `clojure.repl/source` - reads .clj, assumes it's what's running
 - IDEs (Cursive, Calva) - show .clj, assume it's truth
 - Var metadata (`:file`, `:line`) - points to .clj files
@@ -34,10 +33,10 @@ Single picker for data source. Available metrics depend on source type.
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  Source: [Compiler Hook ▼]                                  │
-│          ├── Compiler Hook      → LOC, depth, expressions   │
+│          ├── Compiler Hook      → depth, expressions        │
 │          └── Class Loader       → bytecode size, class count│
 ├─────────────────────────────────────────────────────────────┤
-│  Size by: [LOC ▼]  Color by: [Max Depth ▼]                  │
+│  Size by: [expressions ▼]  Color by: [Max Depth ▼]          │
 │                                                             │
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │                    TREEMAP                           │   │
@@ -50,7 +49,7 @@ Single picker for data source. Available metrics depend on source type.
 
 **Question:** "How complex is the code I'm compiling?"
 
-**Metrics available:** LOC, expressions (raw/expanded), nesting depth, unused vars
+**Metrics available:** expressions (raw/expanded), nesting depth, unused vars
 
 **Trust:** Source-based. Shows what code *claims* to be.
 
@@ -199,10 +198,3 @@ clj -J-javaagent:metrics-agent/target/metrics-agent-0.1.0-SNAPSHOT.jar=compiler 
 clj -J-javaagent:metrics-agent/target/metrics-agent-0.1.0-SNAPSHOT.jar=classloader # loader only
 ```
 
----
-
-## Next Steps
-
-1. Compute metrics (expressions, depth) from captured forms in Clojure
-2. Hook `registerVar` for unused var detection
-3. Replace tools.analyzer.jvm with hook-based analysis (see analyzer-migration.md)

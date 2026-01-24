@@ -1,5 +1,7 @@
 # Fan-in Metrics
 
+> **Note:** This research was written for tools.analyzer AST. Needs adaptation for compiler hooks (using VarExpr hook data instead of AST traversal).
+
 Research notes for adding fan-in (incoming dependency) metrics to the treemap visualization.
 
 ## Goal
