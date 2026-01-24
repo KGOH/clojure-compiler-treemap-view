@@ -214,8 +214,8 @@ function clearSearchHighlights() {
 // Initialize dropdowns
 function initDropdowns() {
   metricsOptions.forEach(opt => {
-    sizeSelect.innerHTML += `<option value="${opt.key}">${opt.label}</option>`;
-    colorSelect.innerHTML += `<option value="${opt.key}">${opt.label}</option>`;
+    sizeSelect.innerHTML += `<option value="${escapeHtml(opt.key)}">${escapeHtml(opt.label)}</option>`;
+    colorSelect.innerHTML += `<option value="${escapeHtml(opt.key)}">${escapeHtml(opt.label)}</option>`;
   });
   sizeSelect.value = defaultSize;
   colorSelect.value = defaultColor;
