@@ -86,6 +86,6 @@
 
   (def tree (analyze/build-hierarchy analyzed))
 
-  (open-html (render-html tree :size :expressions-raw :color :max-depth-raw))
+  (open-html (render-html tree))
 
   ,)

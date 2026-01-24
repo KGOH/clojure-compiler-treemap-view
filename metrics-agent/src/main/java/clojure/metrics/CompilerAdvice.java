@@ -145,11 +145,13 @@ public class CompilerAdvice {
                 line = getCompilerLine();
             }
 
-            // Build the captured def info
+            // Build the captured def info with phase="expanded"
             Map<String, Object> defInfo = new HashMap<>();
+            defInfo.put("phase", "expanded");  // Post-macro-expansion
             defInfo.put("op", opName);
             defInfo.put("name", name);
             defInfo.put("ns", ns);
+            defInfo.put("form", form);  // Store form object directly, compute metrics lazily in Clojure
             if (line != null) {
                 defInfo.put("line", line);
             }

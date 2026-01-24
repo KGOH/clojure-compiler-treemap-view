@@ -11,4 +11,4 @@
          :main-opts   ["-m" "cognitect.test-runner"]
          :exec-fn     cognitect.test-runner.api/test}
 
-  :agent {:jvm-opts ["-javaagent:metrics-agent/target/metrics-agent.jar"]}}}
+  :agent {:jvm-opts ["-javaagent:metrics-agent/target/metrics-agent-0.1.0-SNAPSHOT.jar"]}}}

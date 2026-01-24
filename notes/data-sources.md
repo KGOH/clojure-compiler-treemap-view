@@ -74,12 +74,25 @@ Single picker for data source. Available metrics depend on source type.
 
 **What it captures:** Forms as they are compiled from source in the current session.
 
-**Method:** ByteBuddy @Advice on `Compiler.analyzeSeq`
+**Method:** Dual ByteBuddy @Advice hooks:
+- `Compiler.macroexpand` → captures **raw** forms (pre-expansion)
+- `Compiler.analyzeSeq` → captures **expanded** forms (post-expansion)
 
-**Data available:**
-- def name, namespace, line number
-- Captures: def, defn, defn-, defmacro, defmulti
-- Only sees source-compiled code
+**Data captured:**
+- `phase`: "raw" or "expanded"
+- `op`: defn, defn-, defmacro, defmulti (raw) or def (expanded)
+- `name`, `ns`, `line`, `end-line`
+- `form`: actual Clojure data structure (not stringified)
+
+**Raw vs Expanded example:**
+```
+Raw:      (defn foo [x] (-> x inc dec))
+Expanded: (def foo (clojure.core/fn ([x] (-> x inc dec))))
+```
+
+Note: `defmulti` only appears in raw (expands to `let` block, not bare `def`).
+
+**Design:** Forms stored as objects, metrics computed lazily in Clojure (keeps hook minimal).
 
 **Visibility:**
 | Code Type | Visible? |
@@ -93,17 +106,26 @@ Single picker for data source. Available metrics depend on source type.
 
 ---
 
-## 2. Class Loader Instrumentation (Not yet implemented)
+## 2. Class Loader Instrumentation (Implemented)
 
 **What it captures:** All JVM classes as they are loaded.
 
-**Method:** ByteBuddy instrumentation on ClassLoader.loadClass or defineClass
+**Method:** `Instrumentation.addTransformer` (simpler than ByteBuddy for this use case)
 
-**Data available:**
+**Data captured:**
 - Class name (e.g., `clojure.core$map`, `com.amazonaws.services.s3.AmazonS3Client`)
-- Bytecode size
-- Load timing
-- Can distinguish Clojure fns (naming convention: `namespace$fn_name`)
+- Bytecode size (bytes)
+- Filters out JDK classes (java.*, javax.*, sun.*, jdk.*)
+
+**Clojure function detection:** Classes matching `namespace$fn_name` pattern are identified as Clojure functions. Underscores converted back to hyphens.
+
+**Clojure API:**
+```clojure
+(agent/runtime-footprint)      ; summary: total classes, bytes, clojure vs java
+(agent/get-loaded-classes)     ; map of class-name -> bytecode-size
+(agent/classes-by-namespace)   ; grouped by Clojure namespace
+(agent/largest-classes 10)     ; top N by bytecode size
+```
 
 **Visibility:**
 | Code Type | Visible? |
@@ -113,7 +135,7 @@ Single picker for data source. Available metrics depend on source type.
 | AOT-compiled libs | Yes |
 | clojure.core | Yes |
 | Java libraries | Yes |
-| JDK classes | Yes (optionally) |
+| JDK classes | No (filtered) |
 
 **Use case:** "What am I shipping to production? Total runtime footprint."
 
@@ -149,15 +171,22 @@ Single picker for data source. Available metrics depend on source type.
 
 ---
 
-## Implementation Priority
+## Implementation Status
 
-1. **Compiler hook** (done) - your code's quality metrics
-2. **Class loader** (next) - runtime footprint, bytecode size
+1. **Compiler hook** ✓ - dual hooks (raw + expanded), forms as objects
+2. **Class loader** ✓ - bytecode size, filtered JDK classes
+
+**Agent modes:**
+```bash
+clj -J-javaagent:metrics-agent/target/metrics-agent-0.1.0-SNAPSHOT.jar           # both
+clj -J-javaagent:metrics-agent/target/metrics-agent-0.1.0-SNAPSHOT.jar=compiler  # compiler only
+clj -J-javaagent:metrics-agent/target/metrics-agent-0.1.0-SNAPSHOT.jar=classloader # loader only
+```
 
 ---
 
-## Questions to Resolve
+## Next Steps
 
-1. For class loader: filter JDK classes? (java.*, javax.*, sun.*) → Yes, as option
-2. How to correlate Clojure class names (`ns$fn`) back to source? → Naming convention parse
-3. Memory overhead of class loader instrumentation?
+1. Compute metrics (expressions, depth) from captured forms in Clojure
+2. Hook `registerVar` for unused var detection
+3. Replace tools.analyzer.jvm with hook-based analysis (see analyzer-migration.md)
