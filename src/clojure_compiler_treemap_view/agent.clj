@@ -47,8 +47,7 @@
         form (:form m)
         form-meta (meta form)
         name-sym (second form)]
-    {:form form
-     :phase (:phase m)
+    {:phase (:phase m)
      :ns (:ns m)
      :op (str (first form))
      :name (str name-sym)
