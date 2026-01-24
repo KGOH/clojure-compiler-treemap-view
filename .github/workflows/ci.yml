@@ -43,8 +43,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-clojure-
 
+      - name: Build metrics agent
+        run: mvn -f metrics-agent/pom.xml package -q
+
       - name: Run tests
-        run: clojure -X:test
+        run: clojure -M:agent:test
 
   deploy:
     needs: test
@@ -78,10 +81,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-clojure-
 
+      - name: Build metrics agent
+        run: mvn -f metrics-agent/pom.xml package -q
+
       - name: Generate treemap HTML
         run: |
           mkdir -p _site
-          clojure -M -e "
+          clojure -M:agent -e "
           (require '[clojure-compiler-treemap-view.core :as cctv]
                    '[clojure-compiler-treemap-view.analyze :as analyze])
           (let [nses (map ns-name (all-ns))

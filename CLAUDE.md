@@ -121,3 +121,43 @@ The agent instruments the Clojure compiler to capture:
 1. **MetricsBridge** - def forms before and after macro expansion
 2. **VarRefBridge** - var references for unused detection
 3. **ClassLoadBridge** - bytecode sizes for runtime footprint analysis
+
+## Development Best Practices
+
+Learnings from migrating tools.analyzer.jvm to compiler hooks.
+
+### Migration Strategy
+
+- **Build PoC alongside existing code** - Never break working functionality during exploration
+- **Verify output equivalence before switching** - Write comparison functions (e.g., `compare-with-analyzer`) to confirm new approach matches old
+- **Only migrate after verification passes** - PoC must be proven correct before replacing the original
+
+### Java/Clojure Boundary Design
+
+- **Minimal Java hooks, defer processing to Clojure** - Java captures raw data (form, phase, ns, line); Clojure extracts names, computes metrics
+- **Pass Clojure data structures directly** - Don't serialize/deserialize at the boundary; just pass the form object
+- **Thread-local state for context** - Capture thread-bound values (namespace, line) at method entry before they change
+
+### Avoiding Complexity
+
+- **Skip graceful degradation** - If a dependency (like the agent) is required, require it; optional loading adds complexity without proportional value
+- **Use direct imports once committed** - Reflection-based optional loading is a migration aid, not a permanent solution
+- **Extract shared logic early** - Functions like `process-captured-defs` and `add-unused-flags` prevent duplication between single-ns and multi-ns paths
+
+### What to Avoid
+
+- **Complex extraction in Java hooks** - Parsing metadata, computing metrics, etc. belongs in Clojure where it's easier to iterate
+- **Skip lists and fallback paths** - If the approach needs a skip list, the approach has a problem (hooks solved this)
+- **Heavy transitive dependencies** - tools.analyzer.jvm pulled in significant deps; hooks have zero runtime deps
+
+### Testing Approach
+
+- **Test output format, not implementation** - Tests should verify shape of results, not how they were computed
+- **Fixture namespaces with known characteristics** - Test against namespaces designed to exercise specific cases
+- **Comparison tests during migration** - Temporarily keep both implementations and assert equivalence
+
+### Change Impact Awareness
+
+- **Trace dependencies through the system** - A new runtime requirement affects CI, docs, and user setup
+- **Check CI/CD when changing runtime requirements** - If tests need an agent, CI needs to build and load it too
+- **Update all entry points** - deps.edn aliases, CI workflows, README quickstart must stay in sync
