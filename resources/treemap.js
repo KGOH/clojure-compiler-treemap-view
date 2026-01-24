@@ -545,8 +545,12 @@ initDropdowns();
 initSearch();
 render();
 
-// Handle resize
-window.addEventListener('resize', render);
+// Handle resize with debounce
+let resizeTimeout;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(render, 100);
+});
 
 // Handle keyboard shortcuts
 window.addEventListener('keydown', (e) => {
