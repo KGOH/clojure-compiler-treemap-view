@@ -7,6 +7,17 @@ const defaultColor = '{{DEFAULT_COLOR}}';
 let currentNode = data;
 let pathStack = [];
 
+// HTML escape function to prevent XSS
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // DOM elements
 const treemapEl = document.getElementById('treemap');
 const breadcrumbEl = document.getElementById('breadcrumb');
@@ -59,8 +70,8 @@ function initSearch() {
     selectedSuggestionIdx = -1;
     if (currentMatches.length > 0) {
       suggestionsEl.innerHTML = currentMatches.map((m, i) => {
-        const matched = m.name.slice(0, query.length);
-        const unmatched = m.name.slice(query.length);
+        const matched = escapeHtml(m.name.slice(0, query.length));
+        const unmatched = escapeHtml(m.name.slice(query.length));
         return `<div class="suggestion" data-index="${i}"><span class="matched">${matched}</span><span class="unmatched">${unmatched}</span></div>`;
       }).join('');
       suggestionsEl.classList.add('visible');
@@ -221,7 +232,7 @@ function updateBreadcrumb() {
   }
   breadcrumbEl.innerHTML = pathStack.map((p, i) => {
     const isLast = i === pathStack.length - 1;
-    return `<span class="${isLast ? 'current' : ''}" data-index="${i}">${p}</span>`;
+    return `<span class="${isLast ? 'current' : ''}" data-index="${i}">${escapeHtml(p)}</span>`;
   }).join('.');
 
   breadcrumbEl.querySelectorAll('span:not(.current)').forEach(span => {
@@ -314,12 +325,21 @@ function render() {
     cell.className = 'cell' + (d.children ? ' namespace' : '');
 
     // Set full name for search matching
+    let fullName;
     if (d.data.metrics) {
-      cell.dataset.fullName = `${d.data.ns}/${d.data.name}`;
+      fullName = `${d.data.ns}/${d.data.name}`;
     } else {
       const path = d.ancestors().reverse().slice(1).map(a => a.data.name);
-      cell.dataset.fullName = path.join('.');
+      fullName = path.join('.');
     }
+    cell.dataset.fullName = fullName;
+
+    // Accessibility attributes
+    const sizeVal = d.data.metrics ? (d.data.metrics[sizeKey] || 0) : d.value;
+    const colorVal = d.data.metrics ? (d.data.metrics[colorKey] || 0) : '';
+    cell.setAttribute('role', 'button');
+    cell.setAttribute('tabindex', '0');
+    cell.setAttribute('aria-label', `${fullName}, size ${sizeVal}, color ${colorVal}`);
 
     cell.style.left = d.x0 + 'px';
     cell.style.top = d.y0 + 'px';
@@ -341,6 +361,16 @@ function render() {
         cell.style.background = `${stripes}, ${gradient}`;
       } else {
         cell.style.background = gradient;
+      }
+
+      // Colorblind-friendly pattern classes based on normalized color value
+      const normalizedColor = (val - domain[0]) / (domain[1] - domain[0]) || 0;
+      if (normalizedColor < 0.33) {
+        cell.classList.add('pattern-low');
+      } else if (normalizedColor < 0.67) {
+        cell.classList.add('pattern-mid');
+      } else {
+        cell.classList.add('pattern-high');
       }
     } else {
       // Namespace container - use solid light solarized color
@@ -403,6 +433,14 @@ function render() {
       }
     });
 
+    // Keyboard handler for accessibility
+    cell.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        cell.click();
+      }
+    });
+
     // Store mapping for ancestor highlighting
     nodeToCell.set(d, cell);
 
@@ -460,14 +498,14 @@ function showInfo(d) {
     displayName = path.join('.');
   }
 
-  let html = `<span class="name">${displayName}</span>`;
+  let html = `<span class="name">${escapeHtml(displayName)}</span>`;
 
   if (nodeData.metrics) {
     metricsOptions.forEach(opt => {
       const val = nodeData.metrics[opt.key];
       if (val !== undefined) {
-        const displayVal = val === null ? '-' : val;
-        html += `<span class="metric">${opt.label}: <span class="metric-value">${displayVal}</span></span>`;
+        const displayVal = val === null ? '-' : escapeHtml(String(val));
+        html += `<span class="metric">${escapeHtml(opt.label)}: <span class="metric-value">${displayVal}</span></span>`;
       }
     });
     if (nodeData.metrics['failed?']) {
@@ -512,7 +550,14 @@ window.addEventListener('resize', render);
 
 // Handle keyboard shortcuts
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
+  // Don't handle shortcuts when typing in search
+  if (document.activeElement === searchInput) return;
+
+  if (e.key === '/' || e.key === 's') {
+    // Focus search
+    e.preventDefault();
+    searchInput.focus();
+  } else if (e.key === 'Escape') {
     // Clear search first if active
     if (searchInput.value) {
       searchInput.value = '';
