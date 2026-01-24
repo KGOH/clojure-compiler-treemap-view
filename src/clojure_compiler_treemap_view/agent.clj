@@ -125,6 +125,9 @@
 
    Returns set of unused var symbols (qualified: ns/name).
 
+   Note: ^:const vars are tracked via the analyzeSymbol hook, which captures
+   them before const inlining occurs.
+
    Note: Must be called AFTER loading the namespaces with the agent enabled.
    Use capture-namespaces to load and capture in one step."
   [ns-syms]
@@ -135,7 +138,7 @@
                              :when ns-obj
                              [sym _] (ns-interns ns-obj)]
                          (str ns-sym "/" sym)))
-        ;; Get all referenced vars from hooks
+        ;; Get all referenced vars from hooks (includes const vars now)
         all-refs (get-var-references)]
     (set/difference all-defs all-refs)))
 

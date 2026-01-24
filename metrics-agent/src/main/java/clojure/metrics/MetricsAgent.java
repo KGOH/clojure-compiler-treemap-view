@@ -148,6 +148,24 @@ public class MetricsAgent {
             .installOn(inst);
 
         if (VERBOSE) System.out.println("[MetricsAgent] TheVarExpr hook installed");
+
+        // Hook 4: Compiler.analyzeSymbol for const var references
+        // Const vars are inlined at compile time, so no VarExpr is created.
+        // This hook captures them before the const check.
+        new AgentBuilder.Default()
+            .disableClassFormatChanges()
+            .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
+            .with(listener)
+            .type(ElementMatchers.named("clojure.lang.Compiler"))
+            .transform((builder, typeDescription, classLoader, module, protectionDomain) ->
+                builder.visit(Advice.to(ConstVarRefAdvice.class)
+                    .on(ElementMatchers.named("analyzeSymbol")
+                        .and(ElementMatchers.isPrivate())
+                        .and(ElementMatchers.isStatic())
+                        .and(ElementMatchers.takesArguments(1)))))
+            .installOn(inst);
+
+        if (VERBOSE) System.out.println("[MetricsAgent] ConstVarRef (analyzeSymbol) hook installed");
     }
 
     /**
