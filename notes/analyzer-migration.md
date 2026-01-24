@@ -1,357 +1,165 @@
-# Plan: Replace tools.analyzer.jvm with Compiler Hook
+# Analyzer Migration: tools.analyzer.jvm → Compiler Hook
 
-## Goal
+## Current State (2025-01)
 
-Remove tools.analyzer.jvm dependency and compute all metrics from:
-1. **Raw metrics**: Hook `macroexpand` to capture pre-expansion forms
-2. **Expanded metrics**: Hook `analyzeSeq` to capture post-expansion forms
-3. **Unused detection**: Hook `registerVar` to track var references
+### Completed PoCs
 
-**Principle**: Be true to the source of truth - capture what the compiler actually processes.
+1. **Unified Compiler Hook (macroexpand)** - Working
+   - Single ByteBuddy hook on `Compiler.macroexpand` with enter/exit
+   - `OnMethodEnter` captures raw form (pre-expansion)
+   - `OnMethodExit` captures expanded form (post-expansion, if changed)
+   - Java captures minimal data: form object, phase, ns, compiler-line
+   - Clojure extracts: op, name, line, end-line from form metadata
+   - Files: `MacroexpandUnifiedAdvice.java`, `MetricsBridge.java`
 
----
+2. **Class Loader Hook** - Working
+   - Captures all loaded classes with bytecode size
+   - Filters JDK classes
+   - Files: `ClassLoaderTransformer.java`, `ClassLoadBridge.java`
 
-## Key Insight: Dual-Hook Architecture
-
-The Clojure compiler has two stages we can hook:
-
-```
-Source: (defn foo [] (-> x inc dec))
-              ↓
-        macroexpand (hook point 1 - "raw")
-              ↓
-Hook sees: (defn foo [] (-> x inc dec))   <- phase="raw"
-              ↓
-        macroexpand1 (recursively expands)
-              ↓
-        analyzeSeq (hook point 2 - "expanded")
-              ↓
-Hook sees: (def foo (fn* [] (dec (inc x)))) <- phase="expanded"
-```
-
-**PoC Verified** (2024-01): Dual hooks working:
-- `MacroexpandAdvice` → `defn`, `defn-`, `defmacro`, `defmulti`
-- `CompilerAdvice` → `def` (post-expansion)
-
-Note: Some forms like `defmulti` expand to `let` blocks, not bare `def`, so they only appear in raw.
+3. **Unused Var Detection (VarExpr Hook)** - Working ✓
+   - Hooks `Compiler$VarExpr` and `Compiler$TheVarExpr` constructors
+   - Captures all var references during compilation
+   - Compares with `ns-interns` to find unused vars
+   - **Verified**: Matches tools.analyzer results exactly
+   - Files: `VarRefAdvice.java`, `VarRefBridge.java`
 
 ---
 
-## Architecture
+## Unused Detection Implementation
+
+### Approach: Hook VarExpr Constructor
+
+The Clojure compiler resolves symbols to either:
+- `LocalBindingExpr` - local bindings (let, fn params, etc.)
+- `VarExpr` - var references
+
+By hooking `VarExpr` constructor, we capture ONLY var references (locals excluded by compiler).
+
+### Files Added
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     analyze-ns-complete                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  ┌──────────────────────┐    ┌──────────────────────┐          │
-│  │   Raw Metrics        │    │   Expanded Metrics   │          │
-│  │   (macroexpand hook) │    │   (analyzeSeq hook)  │          │
-│  ├──────────────────────┤    ├──────────────────────┤          │
-│  │ • MacroexpandAdvice  │    │ • CompilerAdvice     │          │
-│  │ • phase="raw"        │    │ • phase="expanded"   │          │
-│  │ • op=defn,defn-,...  │    │ • op=def             │          │
-│  │ • countExpressions() │    │ • countExpressions() │          │
-│  │ • maxDepth()         │    │ • maxDepth()         │          │
-│  └──────────────────────┘    └──────────────────────┘          │
-│                                                                  │
-│  ┌──────────────────────────────────────────────────┐          │
-│  │   Unused Detection (hook registerVar)            │          │
-│  │   • Track defs from analyzeSeq                   │          │
-│  │   • Track refs from registerVar                  │          │
-│  │   • unused = defs - refs                         │          │
-│  └──────────────────────────────────────────────────┘          │
-└─────────────────────────────────────────────────────────────────┘
+metrics-agent/src/main/java/clojure/metrics/
+├── VarRefAdvice.java     # ByteBuddy advice for VarExpr/TheVarExpr
+└── VarRefBridge.java     # Thread-safe storage for var references
 ```
 
----
+### Algorithm
 
-## Phase 1: Enhance CompilerAdvice (Expanded Metrics)
-
-### Add to CompilerAdvice.java
-
-```java
-/**
- * Count expressions in a form recursively.
- */
-public static int countExpressions(Object form) {
-    if (form == null) return 0;
-    try {
-        Class<?> iseqClass = Class.forName("clojure.lang.ISeq");
-        if (iseqClass.isInstance(form)) {
-            int count = 1;
-            Object current = form;
-            while (current != null) {
-                Object first = current.getClass().getMethod("first").invoke(current);
-                count += countExpressions(first);
-                current = current.getClass().getMethod("next").invoke(current);
-            }
-            return count;
-        }
-        // Handle vectors, maps, sets similarly...
-    } catch (Exception e) {}
-    return 1;
-}
-
-/**
- * Calculate max nesting depth.
- */
-public static int maxDepth(Object form) {
-    // Similar recursive walk, track max depth
-}
-
-/**
- * Get LINE_BEFORE/AFTER for accurate LOC.
- */
-public static int[] getLineRange() {
-    // Read Compiler.LINE_BEFORE and LINE_AFTER vars
-}
+```
+unused = (ns-interns loaded-namespaces) - (var-references from hooks)
 ```
 
-### Update captureForm()
-
-```java
-// In captureForm(), after getting name/ns/line:
-int[] lineRange = getLineRange();
-if (lineRange != null) {
-    defInfo.put("line", lineRange[0]);
-    defInfo.put("end-line", lineRange[1]);
-    defInfo.put("loc", lineRange[1] - lineRange[0] + 1);
-}
-
-// Get the init form (body of def)
-Object rest = form.getClass().getMethod("next").invoke(form);  // skip 'def'
-rest = rest.getClass().getMethod("next").invoke(rest);          // skip name
-Object initForm = rest.getClass().getMethod("first").invoke(rest);
-
-defInfo.put("expressions-expanded", countExpressions(initForm));
-defInfo.put("max-depth-expanded", maxDepth(initForm));
-```
-
----
-
-## Phase 2: Add Var Reference Tracking
-
-### Create VarRefAdvice.java
-
-```java
-public class VarRefAdvice {
-    public static final ConcurrentHashMap<String, Set<String>> NS_REFS =
-        new ConcurrentHashMap<>();
-
-    @Advice.OnMethodEnter
-    public static void onEnter(@Advice.Argument(0) Object var) {
-        try {
-            String ns = getCurrentNamespace();
-            Object sym = var.getClass().getMethod("toSymbol").invoke(var);
-            NS_REFS.computeIfAbsent(ns, k -> ConcurrentHashMap.newKeySet())
-                   .add(sym.toString());
-        } catch (Exception e) {}
-    }
-}
-```
-
-### Update MetricsAgent.java
-
-```java
-// Hook registerVar for unused detection
-.type(ElementMatchers.named("clojure.lang.Compiler"))
-.transform((builder, ...) ->
-    builder.visit(Advice.to(VarRefAdvice.class)
-        .on(ElementMatchers.named("registerVar")
-            .and(ElementMatchers.isPrivate())
-            .and(ElementMatchers.isStatic()))))
-```
-
----
-
-## Phase 3: Create VarRefBridge.java
-
-```java
-public class VarRefBridge {
-    // Mirror of VarRefAdvice.NS_REFS for Clojure access
-
-    public static Map<String, Set<String>> getRefsPerNamespace() {
-        return new HashMap<>(VarRefAdvice.NS_REFS);
-    }
-
-    public static void clear() {
-        VarRefAdvice.NS_REFS.clear();
-    }
-}
-```
-
----
-
-## Phase 4: Update Clojure analyze.clj
-
-### New function: analyze-ns-via-hook
+### Clojure API
 
 ```clojure
-(defn analyze-ns-via-hook
-  "Analyze namespace using compiler hook (no tools.analyzer)."
-  [ns-sym]
-  (agent/clear!)
-  (VarRefBridge/clear)
+(require '[clojure-compiler-treemap-view.agent :as agent])
 
-  (require ns-sym :reload)
+;; Load namespaces with capturing
+(agent/capture-namespaces '[my.ns1 my.ns2])
 
-  (let [captured (agent/get-captured-defs)
-        refs-map (into {} (VarRefBridge/getRefsPerNamespace))]
-    (mapv (fn [{:keys [name ns line end-line loc
-                       expressions-expanded max-depth-expanded]}]
-            (let [;; Get raw metrics from source
-                  source-form (read-def-from-source ns name)
-                  refs (get refs-map ns #{})]
-              {:name name
-               :ns ns
-               :line line
-               :metrics {:loc loc
-                         :expressions-raw (count-sexp-forms source-form)
-                         :expressions-expanded expressions-expanded
-                         :max-depth-raw (sexp-max-depth source-form)
-                         :max-depth-expanded max-depth-expanded
-                         :unused? (not (contains? refs (str ns "/" name)))}}))
-          captured)))
+;; Find unused vars
+(agent/find-unused-vars '[my.ns1 my.ns2])
+;; => #{"my.ns1/unused-fn" "my.ns2/also-unused"}
+
+;; Compare with tools.analyzer (verification)
+(agent/compare-unused-detection '[my.namespace])
+;; => {:hook-unused #{...}, :analyzer-unused #{...}, :match? true}
 ```
 
-### Keep existing raw metric functions
+### Verification Results
 
-The existing `count-sexp-forms` and `sexp-max-depth` work perfectly for raw metrics - they read and walk source directly.
+Tested on real namespaces - hook-based detection matches tools.analyzer exactly:
+
+```
+analyze namespace:  Hook=8, Analyzer=8, Match=true
+core namespace:     Hook=2, Analyzer=2, Match=true
+```
 
 ---
 
-## Phase 5: Remove tools.analyzer Dependency
+## Metrics Computation (confirmed approach)
 
-### Update deps.edn
+Per systems-engineer advice, compute metrics in Clojure (not Java):
 
 ```clojure
-;; Remove:
-;; org.clojure/tools.analyzer.jvm {:mvn/version "1.3.2"}
+;; From captured raw form
+:expressions-raw (count-sexp-forms raw-form)
+:max-depth-raw (sexp-max-depth raw-form)
+
+;; From captured expanded form
+:expressions-expanded (count-sexp-forms expanded-form)
+:max-depth-expanded (sexp-max-depth expanded-form)
+
+;; LOC from line metadata
+:loc (if (and line end-line) (inc (- end-line line)) 1)
 ```
 
-### Update analyze.clj
-
-- Remove `(:require [clojure.tools.analyzer.jvm :as ana.jvm] ...)`
-- Remove all `ana.jvm/...` calls
-- Replace `analyze-ns` with `analyze-ns-via-hook`
+The existing `count-sexp-forms` and `sexp-max-depth` functions work on any form.
 
 ---
 
-## Files to Modify
+## Migration Phases (after PoC complete)
+
+### Phase 1: Parallel Implementation
+
+- Create `analyze-ns-via-hook` alongside existing `analyze-ns`
+- Both compute same metrics format
+- Add comparison function
+
+### Phase 2: Verification
+
+- Run both on test fixtures, verify metrics match
+- Document expected differences (raw vs expanded counts may differ)
+- Test on real codebases
+
+### Phase 3: Switch Default
+
+```clojure
+(defn analyze-ns [ns-sym]
+  (if (agent/agent-available?)
+    (analyze-ns-via-hook ns-sym)
+    (analyze-ns-via-tools-analyzer ns-sym)))
+```
+
+### Phase 4: Remove Dependency
+
+- Remove tools.analyzer.jvm from deps.edn
+- Remove skip-namespace workarounds
+- Simplify error handling
+
+---
+
+## Files Overview
+
+### Current Agent Files
+
+```
+metrics-agent/src/main/java/clojure/metrics/
+├── MacroexpandUnifiedAdvice.java  # Def form capture
+├── MetricsBridge.java             # Thread-safe buffer for defs
+├── VarRefAdvice.java              # Var reference capture
+├── VarRefBridge.java              # Thread-safe storage for refs
+├── MetricsAgent.java              # ByteBuddy agent entry point
+├── ClassLoaderTransformer.java    # Class loading capture
+└── ClassLoadBridge.java           # Class data access
+```
+
+### Files to Modify for Migration
 
 | File | Changes |
 |------|---------|
-| `CompilerAdvice.java` | Add countExpressions, maxDepth, getLineRange |
-| `MetricsBridge.java` | Update capture format with new fields |
-| `VarRefAdvice.java` | NEW: Hook registerVar for var tracking |
-| `VarRefBridge.java` | NEW: Clojure-accessible ref data |
-| `MetricsAgent.java` | Add registerVar hook |
-| `agent.clj` | Add var ref functions |
-| `analyze.clj` | Replace tools.analyzer with hook-based analysis |
-| `deps.edn` | Remove tools.analyzer.jvm dependency |
+| `analyze.clj` | Add `analyze-ns-via-hook`, integrate unused from agent |
+| `deps.edn` | Remove tools.analyzer.jvm (Phase 4) |
 
 ---
 
-## Output Format (unchanged)
+## Next Action
 
-```clojure
-{:name "my-fn"
- :ns "my.namespace"
- :line 42
- :metrics {:loc 15
-           :expressions-raw 12
-           :expressions-expanded 28
-           :max-depth-raw 2
-           :max-depth-expanded 4
-           :unused? false}}
-```
+**Implement `analyze-ns-via-hook`**
 
----
-
-## Verification Plan
-
-### Step 1: Compare Results
-
-```clojure
-;; Run both approaches on same namespace
-(def analyzer-result (analyze-ns 'test.fixtures.alpha))
-(def hook-result (analyze-ns-via-hook 'test.fixtures.alpha))
-
-;; Compare metrics
-(= (set (map :name analyzer-result))
-   (set (map :name hook-result)))
-
-(doseq [[a h] (map vector
-                   (sort-by :name analyzer-result)
-                   (sort-by :name hook-result))]
-  (when (not= (:metrics a) (:metrics h))
-    (println "Mismatch:" (:name a) (:metrics a) (:metrics h))))
-```
-
-### Step 2: Test Edge Cases
-
-- Macros (defmacro)
-- Protocols (defprotocol)
-- Multimethods (defmulti/defmethod)
-- Records (defrecord)
-- Threading macros (-> ->>)
-
-### Step 3: Run Existing Tests
-
-```bash
-clj -X:test
-```
-
----
-
-## Risks & Mitigations
-
-| Risk | Mitigation |
-|------|------------|
-| Expression count differs | Hook sees post-expansion; document the difference |
-| Missing defs | Ensure depth=0 filter catches all top-level defs |
-| Var refs incomplete | registerVar may miss some; compare with analyzer first |
-| Performance regression | Hook is faster than tools.analyzer |
-
----
-
-## Timeline
-
-| Phase | Task | Estimate |
-|-------|------|----------|
-| 1 | Enhance CompilerAdvice (expressions, depth, LOC) | 1 day |
-| 2 | Add VarRefAdvice + Bridge | 1 day |
-| 3 | Update agent.clj with new functions | 0.5 day |
-| 4 | Parallel testing (compare both approaches) | 1 day |
-| 5 | Update analyze.clj, remove tools.analyzer | 0.5 day |
-| 6 | Final testing and documentation | 1 day |
-| **Total** | | **5 days** |
-
----
-
-## Appendix: Key Compiler Locations
-
-From `/tmp/clojure-src/src/jvm/clojure/lang/Compiler.java`:
-
-| Function | Line | Purpose |
-|----------|------|---------|
-| `macroexpand` | 7091 | Full macro expansion (raw hook point) |
-| `macroexpand1` | 6994 | Single macro expansion step |
-| `analyzeSeq` | 7098 | Seq analysis (expanded hook point) |
-| `compile1` | 7720 | Compilation entry - calls macroexpand before analyze |
-| `DefExpr.Parser.parse` | 529 | Parses def forms |
-| `FnExpr.parse` | 3973 | Parses fn forms |
-| `analyzeSymbol` | 7308 | Resolves symbols to VarExpr |
-| `registerVar` | 7522 | Tracks var references |
-| `load` | 7618 | Top-level file loading |
-| `LINE_BEFORE/AFTER` | 314-316 | Thread-bound line tracking |
-
-## Appendix: Current PoC Files
-
-| File | Purpose |
-|------|---------|
-| `MacroexpandAdvice.java` | Hooks `macroexpand`, captures with `phase="raw"` |
-| `CompilerAdvice.java` | Hooks `analyzeSeq`, captures with `phase="expanded"` |
-| `MetricsBridge.java` | Thread-safe buffer for captured defs |
-| `MetricsAgent.java` | ByteBuddy agent entry point, installs both hooks |
+1. Use captured forms from `agent/get-captured-defs`
+2. Compute metrics using `count-sexp-forms` and `sexp-max-depth`
+3. Get unused vars from `agent/find-unused-vars`
+4. Return same format as `analyze-ns`
+5. Compare results with existing implementation

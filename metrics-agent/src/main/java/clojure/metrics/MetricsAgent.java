@@ -70,43 +70,47 @@ public class MetricsAgent {
      * Install ByteBuddy advice on Compiler.analyzeSeq
      */
     private static void installCompilerHook(Instrumentation inst) {
+        AgentBuilder.Listener listener = new AgentBuilder.Listener() {
+            @Override
+            public void onDiscovery(String typeName, ClassLoader classLoader,
+                                    JavaModule module, boolean loaded) {
+                if (VERBOSE && (typeName.equals("clojure.lang.Compiler") ||
+                                typeName.startsWith("clojure.lang.Compiler$"))) {
+                    System.out.println("[MetricsAgent] Discovered: " + typeName + " (loaded=" + loaded + ")");
+                }
+            }
+
+            @Override
+            public void onTransformation(TypeDescription typeDescription, ClassLoader classLoader,
+                                        JavaModule module, boolean loaded, DynamicType dynamicType) {
+                if (VERBOSE) System.out.println("[MetricsAgent] Transformed: " + typeDescription.getName());
+            }
+
+            @Override
+            public void onIgnored(TypeDescription typeDescription, ClassLoader classLoader,
+                                 JavaModule module, boolean loaded) {
+                // Ignore
+            }
+
+            @Override
+            public void onError(String typeName, ClassLoader classLoader, JavaModule module,
+                               boolean loaded, Throwable throwable) {
+                System.err.println("[MetricsAgent] Error transforming: " + typeName);
+                throwable.printStackTrace();
+            }
+
+            @Override
+            public void onComplete(String typeName, ClassLoader classLoader, JavaModule module,
+                                  boolean loaded) {
+                // Ignore
+            }
+        };
+
+        // Hook 1: Compiler.macroexpand for def form capture
         new AgentBuilder.Default()
             .disableClassFormatChanges()
             .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
-            .with(new AgentBuilder.Listener() {
-                @Override
-                public void onDiscovery(String typeName, ClassLoader classLoader,
-                                        JavaModule module, boolean loaded) {
-                    if (VERBOSE && typeName.equals("clojure.lang.Compiler")) {
-                        System.out.println("[MetricsAgent] Discovered: " + typeName + " (loaded=" + loaded + ")");
-                    }
-                }
-
-                @Override
-                public void onTransformation(TypeDescription typeDescription, ClassLoader classLoader,
-                                            JavaModule module, boolean loaded, DynamicType dynamicType) {
-                    if (VERBOSE) System.out.println("[MetricsAgent] Transformed: " + typeDescription.getName());
-                }
-
-                @Override
-                public void onIgnored(TypeDescription typeDescription, ClassLoader classLoader,
-                                     JavaModule module, boolean loaded) {
-                    // Ignore
-                }
-
-                @Override
-                public void onError(String typeName, ClassLoader classLoader, JavaModule module,
-                                   boolean loaded, Throwable throwable) {
-                    System.err.println("[MetricsAgent] Error transforming: " + typeName);
-                    throwable.printStackTrace();
-                }
-
-                @Override
-                public void onComplete(String typeName, ClassLoader classLoader, JavaModule module,
-                                      boolean loaded) {
-                    // Ignore
-                }
-            })
+            .with(listener)
             .type(ElementMatchers.named("clojure.lang.Compiler"))
             .transform((builder, typeDescription, classLoader, module, protectionDomain) ->
                 builder
@@ -117,7 +121,33 @@ public class MetricsAgent {
                             .and(ElementMatchers.takesArguments(1)))))
             .installOn(inst);
 
-        if (VERBOSE) System.out.println("[MetricsAgent] Compiler hook installed");
+        if (VERBOSE) System.out.println("[MetricsAgent] Macroexpand hook installed");
+
+        // Hook 2: VarExpr constructor for var reference capture
+        new AgentBuilder.Default()
+            .disableClassFormatChanges()
+            .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
+            .with(listener)
+            .type(ElementMatchers.named("clojure.lang.Compiler$VarExpr"))
+            .transform((builder, typeDescription, classLoader, module, protectionDomain) ->
+                builder.visit(Advice.to(VarRefAdvice.class)
+                    .on(ElementMatchers.isConstructor())))
+            .installOn(inst);
+
+        if (VERBOSE) System.out.println("[MetricsAgent] VarExpr hook installed");
+
+        // Hook 3: TheVarExpr constructor for #'var references
+        new AgentBuilder.Default()
+            .disableClassFormatChanges()
+            .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
+            .with(listener)
+            .type(ElementMatchers.named("clojure.lang.Compiler$TheVarExpr"))
+            .transform((builder, typeDescription, classLoader, module, protectionDomain) ->
+                builder.visit(Advice.to(VarRefAdvice.class)
+                    .on(ElementMatchers.isConstructor())))
+            .installOn(inst);
+
+        if (VERBOSE) System.out.println("[MetricsAgent] TheVarExpr hook installed");
     }
 
     /**
