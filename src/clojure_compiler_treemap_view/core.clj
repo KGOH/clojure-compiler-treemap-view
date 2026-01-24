@@ -72,7 +72,9 @@
      :color - Metric for cell color (default: :max-depth-raw)
 
    Available metrics:
-     :expressions-raw, :expressions-expanded, :max-depth-raw, :max-depth-expanded"
+     :expressions-raw, :expressions-expanded, :max-depth-raw, :max-depth-expanded
+
+   WARNING: Not thread-safe. Do not call concurrently from multiple threads."
   [ns-syms & {:keys [size color]
               :or {size :expressions-raw
                    color :max-depth-raw}}]

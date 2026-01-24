@@ -53,7 +53,10 @@
   "Clear capture buffers, execute body, then drain captured defs.
    Options (as leading keyword-value pairs before body):
      :include-var-refs? - Also clear var reference tracking (default: false)
-   Binds `captured` to the result of get-captured-defs in body's scope."
+   Binds `captured` to the result of get-captured-defs in body's scope.
+
+   WARNING: Not thread-safe. Uses global buffers shared across all threads.
+   Concurrent calls will corrupt each other's data."
   {:arglists '([& body] [:include-var-refs? bool & body])}
   [& args]
   (let [[opts body] (if (keyword? (first args))
@@ -157,7 +160,9 @@
      :ns-syms - Optional collection of namespace symbols to filter by.
                 If nil, processes all captured defs.
 
-   Returns {:result [...] :errors [...]}."
+   Returns {:result [...] :errors [...]}.
+
+   WARNING: Not thread-safe. Do not call concurrently from multiple threads."
   [& {:keys [ns-syms]}]
   (let [captured (agent/get-captured-defs)
         ns-strs (when ns-syms (set (map str ns-syms)))
@@ -187,7 +192,9 @@
      :ns      - Namespace (string)
      :file    - Source file (nil - hooks don't capture this)
      :line    - Line number
-     :metrics - Map of metrics"
+     :metrics - Map of metrics
+
+   WARNING: Not thread-safe. Do not call concurrently from multiple threads."
   [ns-sym]
   (with-error-tracking
     (try
@@ -206,7 +213,9 @@
 
    Returns {:result [...] :errors [...]} where:
      :result - seq of function data maps, each with :unused? in metrics
-     :errors - vector of error maps from this analysis run"
+     :errors - vector of error maps from this analysis run
+
+   WARNING: Not thread-safe. Do not call concurrently from multiple threads."
   [ns-syms]
   (with-error-tracking
     (with-capture :include-var-refs? true
