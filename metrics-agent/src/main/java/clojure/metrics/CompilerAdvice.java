@@ -159,7 +159,7 @@ public class CompilerAdvice {
                 defInfo.put("end-line", endLine);
             }
 
-            MetricsBridge.capture(defInfo);
+            MetricsBridge.captureOld(defInfo);  // OLD implementation
 
         } catch (Exception e) {
             // Silently ignore reflection errors

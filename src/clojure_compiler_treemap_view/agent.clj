@@ -147,6 +147,98 @@
      :line-mismatches (vec line-mismatches)}))
 
 ;;; ==========================================================================
+;;; Migration: Old vs New Hook Comparison
+;;; ==========================================================================
+
+(defn- java-map->clj
+  "Convert Java Map to Clojure map with keyword keys."
+  [m]
+  (into {} (for [[k v] m] [(keyword k) v])))
+
+(defn get-captured-defs-old
+  "Drain OLD buffer (MacroexpandAdvice + CompilerAdvice)."
+  []
+  (when (agent-available?)
+    (->> (MetricsBridge/drainBufferOld)
+         (mapv java-map->clj))))
+
+(defn get-captured-defs-new
+  "Drain NEW buffer (MacroexpandUnifiedAdvice)."
+  []
+  (when (agent-available?)
+    (->> (MetricsBridge/drainBufferNew)
+         (mapv java-map->clj))))
+
+(defn- normalize-for-comparison
+  "Normalize a captured def for comparison (exclude form object)."
+  [d]
+  (-> d
+      (select-keys [:phase :op :name :ns :line :end-line])
+      (update :form (constantly nil))))  ; exclude form from comparison
+
+(defn- group-by-key
+  "Group defs by [name ns phase] for comparison."
+  [defs]
+  (->> defs
+       (map (fn [d] [((juxt :name :ns :phase) d) d]))
+       (into {})))
+
+(defn compare-old-vs-new
+  "Compare old implementation (2 hooks) vs new implementation (1 unified hook).
+
+   Loads a namespace and compares captures from both implementations.
+   Returns {:match? true/false :mismatches [...] :old-only [...] :new-only [...]}"
+  [ns-sym]
+  (clear!)
+  (require ns-sym :reload)
+
+  (let [old-defs (get-captured-defs-old)
+        new-defs (get-captured-defs-new)
+
+        ;; Normalize and group for comparison
+        old-normalized (map normalize-for-comparison old-defs)
+        new-normalized (map normalize-for-comparison new-defs)
+
+        old-by-key (group-by-key old-normalized)
+        new-by-key (group-by-key new-normalized)
+
+        old-keys (set (keys old-by-key))
+        new-keys (set (keys new-by-key))
+
+        common-keys (set/intersection old-keys new-keys)
+        old-only (set/difference old-keys new-keys)
+        new-only (set/difference new-keys old-keys)
+
+        ;; Check for mismatches in common keys
+        mismatches (for [k common-keys
+                        :let [old-def (old-by-key k)
+                              new-def (new-by-key k)]
+                        :when (not= old-def new-def)]
+                    {:key k :old old-def :new new-def})]
+
+    {:match? (and (empty? old-only) (empty? new-only) (empty? mismatches))
+     :old-count (count old-defs)
+     :new-count (count new-defs)
+     :mismatches (vec mismatches)
+     :old-only (vec old-only)
+     :new-only (vec new-only)}))
+
+(defn capture-namespace-validated
+  "Capture namespace with both old and new implementations, assert they match.
+
+   If they match, returns the new implementation result.
+   If they don't match, throws an exception with details."
+  [ns-sym]
+  (let [comparison (compare-old-vs-new ns-sym)]
+    (when-not (:match? comparison)
+      (throw (ex-info "Old vs New implementation mismatch!"
+                      comparison)))
+    ;; Return new implementation result
+    (clear!)
+    (require ns-sym :reload)
+    (get-captured-defs-new)))
+
+;;; ==========================================================================
 ;;; Class Loader Functions (Runtime Footprint)
 ;;; ==========================================================================
 

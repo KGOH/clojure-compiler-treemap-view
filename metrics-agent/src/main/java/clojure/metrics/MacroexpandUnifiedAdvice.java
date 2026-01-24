@@ -6,87 +6,113 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * ByteBuddy advice for clojure.lang.Compiler.macroexpand
+ * NEW unified ByteBuddy advice for clojure.lang.Compiler.macroexpand
  *
- * This advice captures def/defn forms BEFORE macro expansion,
- * providing "raw" metrics as written in source code.
+ * Captures BOTH raw (input) and expanded (output) forms in a single hook:
+ * - OnMethodEnter: captures input form as phase="raw"
+ * - OnMethodExit: captures return value as phase="expanded"
  *
- * The signature of macroexpand is:
- *   static Object macroexpand(Object form)
- *
- * macroexpand recursively calls macroexpand1 until form stops changing.
- * We capture at depth=0 to get the original source form.
- *
- * Example:
- *   Source: (defn foo [] (-> x inc dec))
- *   MacroexpandAdvice sees at depth=0: (defn foo [] (-> x inc dec)) <- raw
- *   After expansion: (def foo (fn* [] (dec (inc x))))
+ * This replaces the old two-hook approach (MacroexpandAdvice + CompilerAdvice).
  */
-public class MacroexpandAdvice {
+public class MacroexpandUnifiedAdvice {
 
     /**
      * ThreadLocal depth counter for macroexpand calls.
      * macroexpand calls itself recursively - we only capture at depth 0.
-     * Must be public for ByteBuddy advice inlining.
      */
-    public static final ThreadLocal<Integer> MACROEXPAND_DEPTH = ThreadLocal.withInitial(() -> 0);
+    public static final ThreadLocal<Integer> DEPTH = ThreadLocal.withInitial(() -> 0);
+
+    /**
+     * Store the input form to compare with output on exit.
+     * Only set at depth 0.
+     */
+    public static final ThreadLocal<Object> INPUT_FORM = new ThreadLocal<>();
 
     /**
      * Called when entering macroexpand.
-     * Returns true if we should decrement depth on exit.
+     * Captures the INPUT (raw) form at depth 0.
      *
      * @param form The form being expanded
-     * @return true if depth was incremented
+     * @return 0=not ISeq, 1=ISeq but depth>0, 2=ISeq and depth==0 (capture)
      */
     @Advice.OnMethodEnter
-    public static boolean onEnter(@Advice.Argument(0) Object form) {
-        // Fast path: only ISeq can be def forms
+    public static int onEnter(@Advice.Argument(0) Object form) {
         if (form == null) {
-            return false;
+            return 0;
         }
 
+        // Only process ISeq forms
         try {
             Class<?> iseqClass = Class.forName("clojure.lang.ISeq");
             if (!iseqClass.isInstance(form)) {
-                return false;  // Don't track depth for non-sequences
+                return 0;  // Not ISeq, don't track
             }
         } catch (ClassNotFoundException e) {
-            return false;
+            return 0;
         }
 
-        int depth = MACROEXPAND_DEPTH.get();
-        MACROEXPAND_DEPTH.set(depth + 1);
+        int depth = DEPTH.get();
+        DEPTH.set(depth + 1);
 
-        // Only capture at depth 0 (first call, before any expansion)
         if (depth == 0) {
+            // Store input form for exit handler
+            INPUT_FORM.set(form);
+
+            // Capture raw form
             try {
-                captureForm(form);
+                captureForm(form, "raw");
             } catch (Throwable t) {
-                // Silently ignore errors to avoid breaking compilation
+                // Silently ignore
             }
+            return 2;  // ISeq at depth 0, will process on exit
         }
 
-        return true;  // We incremented depth
+        return 1;  // ISeq but depth > 0, only decrement on exit
     }
 
+    /**
+     * Called when exiting macroexpand.
+     * Captures the OUTPUT (expanded) form at depth 0.
+     *
+     * @param enterResult 0=don't decrement, 1=decrement only, 2=decrement and capture
+     * @param result The expanded form (return value)
+     */
     @Advice.OnMethodExit
-    public static void onExit(@Advice.Enter boolean didIncrement) {
-        if (didIncrement) {
-            MACROEXPAND_DEPTH.set(MACROEXPAND_DEPTH.get() - 1);
+    public static void onExit(@Advice.Enter int enterResult,
+                              @Advice.Return Object result) {
+        // Only decrement if we incremented (enterResult > 0)
+        if (enterResult > 0) {
+            DEPTH.set(DEPTH.get() - 1);
+        }
+
+        // Only capture expanded if we were at depth 0 (enterResult == 2)
+        if (enterResult != 2) {
+            return;
+        }
+
+        // Capture expanded form if different from input
+        try {
+            Object inputForm = INPUT_FORM.get();
+            INPUT_FORM.remove();
+
+            // Only capture expanded if it changed
+            if (result != null && result != inputForm) {
+                captureForm(result, "expanded");
+            }
+        } catch (Throwable t) {
+            // Silently ignore
         }
     }
 
     /**
-     * Capture def/defn forms with phase="raw" and send to MetricsBridge.
-     * Must be public for ByteBuddy advice inlining.
+     * Capture def forms and send to MetricsBridge NEW buffer.
      */
-    public static void captureForm(Object form) {
+    public static void captureForm(Object form, String phase) {
         if (form == null) {
             return;
         }
 
         try {
-            // ISeq.first() returns the operator symbol
             Object first = form.getClass().getMethod("first").invoke(form);
             if (first == null) {
                 return;
@@ -99,8 +125,7 @@ public class MacroexpandAdvice {
                 return;
             }
 
-            // Capture def forms - at this point we see the ORIGINAL form
-            // e.g., "defn" not "def", "(-> x inc)" not "(dec (inc x))"
+            // Only capture def forms
             if (!"def".equals(opName) && !"defn".equals(opName) && !"defn-".equals(opName) &&
                 !"defmacro".equals(opName) && !"defmulti".equals(opName) &&
                 !"defprotocol".equals(opName) && !"defrecord".equals(opName) &&
@@ -108,7 +133,7 @@ public class MacroexpandAdvice {
                 return;
             }
 
-            // Get the second element (the name symbol)
+            // Get name
             Object rest = form.getClass().getMethod("next").invoke(form);
             if (rest == null) {
                 return;
@@ -121,19 +146,17 @@ public class MacroexpandAdvice {
 
             String name = nameSymbol.toString();
 
-            // Get line number and namespace using shared helpers
+            // Get line and namespace
             Integer line = null;
             Integer endLine = null;
             String ns = CompilerAdvice.getCurrentNamespace();
 
-            // Try to get metadata from the form itself
             Object meta = CompilerAdvice.getMetadata(form);
             if (meta != null) {
                 line = CompilerAdvice.getMetaInt(meta, "line");
                 endLine = CompilerAdvice.getMetaInt(meta, "end-line");
             }
 
-            // Also check name symbol metadata
             Object nameMeta = CompilerAdvice.getMetadata(nameSymbol);
             if (nameMeta != null) {
                 if (line == null) {
@@ -144,18 +167,17 @@ public class MacroexpandAdvice {
                 }
             }
 
-            // Fall back to Compiler.LINE
             if (line == null) {
                 line = CompilerAdvice.getCompilerLine();
             }
 
-            // Build the captured def info with phase="raw"
+            // Build captured info
             Map<String, Object> defInfo = new HashMap<>();
-            defInfo.put("phase", "raw");  // Pre-macro-expansion
-            defInfo.put("op", opName);     // Will be "defn" not "def"
+            defInfo.put("phase", phase);
+            defInfo.put("op", opName);
             defInfo.put("name", name);
             defInfo.put("ns", ns);
-            defInfo.put("form", form);  // Store form object directly, compute metrics lazily in Clojure
+            defInfo.put("form", form);
             if (line != null) {
                 defInfo.put("line", line);
             }
@@ -163,10 +185,11 @@ public class MacroexpandAdvice {
                 defInfo.put("end-line", endLine);
             }
 
-            MetricsBridge.captureOld(defInfo);  // OLD implementation
+            // Capture to NEW buffer
+            MetricsBridge.captureNew(defInfo);
 
         } catch (Exception e) {
-            // Silently ignore reflection errors
+            // Silently ignore
         }
     }
 }
