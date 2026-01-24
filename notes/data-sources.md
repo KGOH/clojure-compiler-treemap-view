@@ -74,15 +74,23 @@ Single picker for data source. Available metrics depend on source type.
 
 **What it captures:** Forms as they are compiled from source in the current session.
 
-**Method:** Dual ByteBuddy @Advice hooks:
-- `Compiler.macroexpand` → captures **raw** forms (pre-expansion)
-- `Compiler.analyzeSeq` → captures **expanded** forms (post-expansion)
+**Method:** Single ByteBuddy @Advice hook on `Compiler.macroexpand`:
+- `OnMethodEnter` → captures **raw** form (pre-expansion)
+- `OnMethodExit` → captures **expanded** form (post-expansion, if changed)
 
-**Data captured:**
+**Architecture:** Minimal Java, defer to Clojure.
+
+Java captures only thread-bound state (must capture at compile time):
+- `form`: the Clojure data structure
 - `phase`: "raw" or "expanded"
-- `op`: defn, defn-, defmacro, defmulti (raw) or def (expanded)
-- `name`, `ns`, `line`, `end-line`
-- `form`: actual Clojure data structure (not stringified)
+- `ns`: current namespace (from `RT.CURRENT_NS`)
+- `compiler-line`: fallback line number (from `Compiler.LINE`)
+
+Clojure extracts the rest from the immutable form:
+- `op`: `(first form)`
+- `name`: `(second form)`
+- `line`: `(:line (meta form))` or `(:line (meta name))` or `compiler-line`
+- `end-line`: from metadata
 
 **Raw vs Expanded example:**
 ```
@@ -91,8 +99,6 @@ Expanded: (def foo (clojure.core/fn ([x] (-> x inc dec))))
 ```
 
 Note: `defmulti` only appears in raw (expands to `let` block, not bare `def`).
-
-**Design:** Forms stored as objects, metrics computed lazily in Clojure (keeps hook minimal).
 
 **Visibility:**
 | Code Type | Visible? |
@@ -173,8 +179,18 @@ Note: `defmulti` only appears in raw (expands to `let` block, not bare `def`).
 
 ## Implementation Status
 
-1. **Compiler hook** ✓ - dual hooks (raw + expanded), forms as objects
+1. **Compiler hook** ✓ - single hook on `macroexpand` (enter=raw, exit=expanded)
 2. **Class loader** ✓ - bytecode size, filtered JDK classes
+
+**Java files:**
+```
+metrics-agent/src/main/java/clojure/metrics/
+├── MacroexpandUnifiedAdvice.java  # Single hook, minimal capture
+├── MetricsBridge.java              # Thread-safe buffer
+├── MetricsAgent.java               # ByteBuddy entry point
+├── ClassLoaderTransformer.java     # Bytecode size capture
+└── ClassLoadBridge.java            # Class data access
+```
 
 **Agent modes:**
 ```bash
