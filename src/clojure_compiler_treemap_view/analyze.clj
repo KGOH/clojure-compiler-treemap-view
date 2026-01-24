@@ -113,27 +113,24 @@
 (defn analyze-captured
   "Analyze already-captured def forms without reloading namespaces.
 
-   Processes whatever is currently in the agent's capture buffer.
+   Peeks at the agent's capture buffer (does not drain it).
    Useful when forms were captured during normal REPL usage.
+   Call agent/clear! explicitly when you want to reset the buffer.
 
    Options:
      :ns-syms - Optional collection of namespace symbols to filter by.
                 If nil, processes all captured defs.
-     :drain?  - If true (default), drains the buffer. If false, peeks.
      :unused? - If true, adds :unused? flags using current var references.
                 Requires namespaces to already be loaded.
 
    Returns vector of fn-data maps (same format as analyze-nses)."
-  [& {:keys [ns-syms drain? unused?]
-      :or {drain? true unused? false}}]
-  (let [captured (if drain?
-                   (agent/get-captured-defs)
-                   (agent/peek-captured-defs))
+  [& {:keys [ns-syms unused?]
+      :or {unused? false}}]
+  (let [captured (agent/peek-captured-defs)
         ns-strs (when ns-syms (set (map str ns-syms)))
         fn-data (process-captured-defs captured ns-strs)]
     (if unused?
-      (let [;; Determine which namespaces to check for unused
-            nses-to-check (or ns-syms
+      (let [nses-to-check (or ns-syms
                               (->> fn-data (map :ns) distinct (map symbol)))
             unused-vars (agent/find-unused-vars nses-to-check)]
         (add-unused-flags fn-data unused-vars))
