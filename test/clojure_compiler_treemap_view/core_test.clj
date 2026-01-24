@@ -61,15 +61,6 @@
             (is utils "should have utils under alpha")
             (is handlers "should have handlers under alpha")))))))
 
-(deftest test-metrics-dropdown-options
-  (testing "returns available metrics"
-    (let [opts (core/metrics-dropdown-options)]
-      (is (seq opts))
-      (is (every? :key opts))
-      (is (every? :label opts))
-      (is (some #(= :expressions-raw (:key %)) opts))
-      (is (some #(= :max-depth-raw (:key %)) opts)))))
-
 (deftest test-render-html-generates-valid-output
   (testing "render-html generates valid HTML"
     (let [fn-data (analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha])

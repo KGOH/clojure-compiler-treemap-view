@@ -13,11 +13,6 @@
    {:key :max-depth-raw :label "Max Depth (Raw)"}
    {:key :max-depth-expanded :label "Max Depth (Expanded)"}])
 
-(defn metrics-dropdown-options
-  "Return list of available metrics for dropdowns."
-  []
-  metrics-options)
-
 (defn- slurp-resource
   "Slurp a resource file from the resources directory."
   [filename]
@@ -61,7 +56,7 @@
      :color - Metric for cell color (default: :max-depth-raw)
 
    Available metrics:
-     :loc, :expressions-raw, :expressions-expanded, :max-depth-raw, :max-depth-expanded"
+     :expressions-raw, :expressions-expanded, :max-depth-raw, :max-depth-expanded"
   [ns-syms & {:keys [size color]
               :or {size :expressions-raw
                    color :max-depth-raw}}]
