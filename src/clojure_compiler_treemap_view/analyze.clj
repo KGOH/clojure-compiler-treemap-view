@@ -178,19 +178,18 @@
 
    Returns seq of function data maps, each with :unused? in metrics."
   [ns-syms]
-  (try
-    (agent/clear!)
-    (agent/clear-var-references!)
-    (doseq [ns-sym ns-syms]
-      (require ns-sym :reload))
-    (let [captured (agent/get-captured-defs)
-          ns-strs (set (map str ns-syms))
-          fn-data (process-captured-defs captured ns-strs)
-          unused-vars (agent/find-unused-vars ns-syms)]
-      (add-unused-flags fn-data unused-vars))
-    (catch Throwable e
-      (record-error! (first ns-syms) :analyze-nses e)
-      [])))
+  (agent/clear!)
+  (agent/clear-var-references!)
+  (doseq [ns-sym ns-syms]
+    (try
+      (require ns-sym :reload)
+      (catch Throwable e
+        (record-error! ns-sym :reload e))))
+  (let [captured (agent/get-captured-defs)
+        ns-strs (set (map str ns-syms))
+        fn-data (process-captured-defs captured ns-strs)
+        unused-vars (agent/find-unused-vars ns-syms)]
+    (add-unused-flags fn-data unused-vars)))
 
 ;; ============================================================================
 ;; Hierarchy Building
