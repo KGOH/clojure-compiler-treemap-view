@@ -128,8 +128,7 @@
    Note: ^:const vars are tracked via the analyzeSymbol hook, which captures
    them before const inlining occurs.
 
-   Note: Must be called AFTER loading the namespaces with the agent enabled.
-   Use capture-namespaces to load and capture in one step."
+   Note: Must be called AFTER loading the namespaces with the agent enabled."
   [ns-syms]
   (let [;; Get all defined vars from runtime
         all-defs (into #{}
@@ -142,20 +141,6 @@
         all-refs (get-var-references)]
     (set/difference all-defs all-refs)))
 
-(defn capture-namespaces
-  "Clear buffers, load namespaces, and return captured defs.
-
-   This clears both the def buffer and var reference buffer,
-   loads the namespaces, then returns the captured def info.
-
-   After calling this, use find-unused-vars to get unused vars."
-  [ns-syms]
-  (clear!)
-  (clear-var-references!)
-  (doseq [ns-sym ns-syms]
-    (require ns-sym :reload))
-  (get-captured-defs))
-
 (comment
 
   ;; Captured defs
@@ -167,10 +152,7 @@
        sort)
 
   ;; Unused var detection
-  ;; 1. Load namespaces with agent enabled
-  (capture-namespaces '[clojure-compiler-treemap-view.fixtures.alpha clojure-compiler-treemap-view.analyze-test])
-
-  ;; 2. Find unused vars
-  (find-unused-vars '[clojure-compiler-treemap-view.fixtures.alpha clojure-compiler-treemap-view.analyze-test])
+  ;; Use analyze/analyze-nses which handles buffer clearing and unused detection
+  ;; See clojure-compiler-treemap-view.analyze namespace
 
   ,)
