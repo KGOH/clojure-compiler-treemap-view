@@ -148,9 +148,10 @@
 (defn analyze-captured
   "Analyze already-captured def forms without reloading namespaces.
 
-   Peeks at the agent's capture buffer (does not drain it).
+   Drains the capture buffer (subsequent calls return empty until more forms
+   compile). Store the result if you need it later.
+
    Useful when forms were captured during normal REPL usage.
-   Call agent/clear! explicitly when you want to reset the buffer.
 
    Options:
      :ns-syms - Optional collection of namespace symbols to filter by.
@@ -158,7 +159,7 @@
 
    Returns {:result [...] :errors [...]}."
   [& {:keys [ns-syms]}]
-  (let [captured (agent/peek-captured-defs)
+  (let [captured (agent/get-captured-defs)
         ns-strs (when ns-syms (set (map str ns-syms)))
         fn-data (process-captured-defs captured ns-strs)
         nses-to-check (or ns-syms
