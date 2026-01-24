@@ -72,9 +72,11 @@
 
 
 (comment
-  (def {:keys [result errors]} (analyze/analyze-captured))
+  (def analysis (analyze/analyze-captured))
+  (def result (:result analysis))
+  (def errors (:errors analysis))
 
-  #_(def {:keys [result errors]} (analyze/analyze-nses (->> (all-ns) (map ns-name))))
+  #_(def analysis (analyze/analyze-nses (->> (all-ns) (map ns-name))))
 
   ;; Check errors from last analysis
   errors
