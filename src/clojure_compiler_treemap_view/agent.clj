@@ -3,29 +3,21 @@
 
    Requires the metrics-agent Java agent to be loaded via -javaagent flag.
 
-   This namespace provides a Clojure-friendly interface to the Java agent,
-   which has two instrumentation modes:
-
-   1. Compiler Hook (MetricsBridge): captures def/defn forms as they compile
-   2. Class Loader (ClassLoadBridge): captures all classes as they load
+   This namespace provides a Clojure-friendly interface to the Java agent's
+   compiler hooks that capture def/defn forms and var references during compilation.
 
    Usage:
-     ;; Start REPL with agent (both modes by default)
+     ;; Start REPL with agent
      clj -J-javaagent:metrics-agent/target/metrics-agent.jar
-
-     ;; Or specific modes
-     clj -J-javaagent:metrics-agent/target/metrics-agent.jar=compiler
-     clj -J-javaagent:metrics-agent/target/metrics-agent.jar=classloader
 
      (require '[clojure-compiler-treemap-view.agent :as agent])
 
-     ;; Compiler hook: captured defs
+     ;; Get captured defs
      (agent/get-captured-defs)
 
-     ;; Class loader: runtime footprint
-     (agent/runtime-footprint)"
-  (:require [clojure.set :as set]
-            [clojure.string :as str])
+     ;; Find unused vars
+     (agent/find-unused-vars ns-syms)"
+  (:require [clojure.set :as set])
   (:import [clojure.metrics MetricsBridge ClassLoadBridge VarRefBridge]))
 
 ;; ==========================================================================
@@ -74,38 +66,10 @@
   []
   (mapv extract-def-info (MetricsBridge/peekBuffer)))
 
-(defn buffer-size
-  "Return the number of captured defs waiting in the buffer."
-  []
-  (MetricsBridge/bufferSize))
-
 (defn clear!
   "Clear all captured defs from the buffer."
   []
   (MetricsBridge/clearBuffer))
-
-(defn set-enabled!
-  "Enable or disable def capturing."
-  [enabled?]
-  (MetricsBridge/setEnabled (boolean enabled?)))
-
-(defn enabled?
-  "Check if def capturing is currently enabled."
-  []
-  (MetricsBridge/isEnabled))
-
-(defn capture-namespace
-  "Clear buffer, load a namespace, and return captured defs.
-
-   This is a convenience function for testing the agent.
-
-   Usage:
-     (capture-namespace 'my.namespace)
-     ;; => [{:op \"defn\" :name \"foo\" :ns \"my.namespace\" :line 5} ...]"
-  [ns-sym]
-  (clear!)
-  (require ns-sym :reload)
-  (get-captured-defs))
 
 ;;; ==========================================================================
 ;;; Class Loader Functions (Runtime Footprint)
@@ -132,91 +96,6 @@
   "Clear all captured class data."
   []
   (ClassLoadBridge/clear))
-
-(defn clojure-class?
-  "Check if class name matches Clojure function pattern (namespace$fn).
-
-   Clojure compiles functions to classes with names like:
-     clojure.core$map
-     my.namespace$my_fn
-     my.namespace$handler$fn__1234 (anonymous)"
-  [class-name]
-  (and (string? class-name)
-       (str/includes? class-name "$")
-       ;; Exclude Java inner classes which use $$ or have numeric-only suffix
-       (not (str/includes? class-name "$$"))
-       ;; Must have something before the $
-       (not (str/starts-with? class-name "$"))))
-
-(defn parse-clojure-class
-  "Parse a Clojure class name into namespace and function name.
-
-   'my.namespace$my_fn' -> {:ns \"my.namespace\" :fn \"my-fn\"}
-   'my.namespace$handler$fn__1234' -> {:ns \"my.namespace\" :fn \"handler\" :anonymous? true}"
-  [class-name]
-  (when (clojure-class? class-name)
-    (let [[ns-part & fn-parts] (str/split class-name #"\$")
-          fn-part (first fn-parts)
-          ;; Convert underscores back to hyphens (Clojure munging)
-          fn-name (when fn-part (str/replace fn-part "_" "-"))
-          anonymous? (or (> (count fn-parts) 1)
-                        (and fn-name (re-matches #".*__\d+$" fn-name)))]
-      (when (and ns-part fn-name)
-        (cond-> {:ns ns-part
-                 :fn (str/replace fn-name #"__\d+$" "")}
-          anonymous? (assoc :anonymous? true))))))
-
-(defn runtime-footprint
-  "Get runtime footprint summary.
-
-   Returns a map with:
-     :total-classes   - Total number of captured classes
-     :total-bytes     - Total bytecode size
-     :total-mb        - Total bytecode size in MB
-     :clojure-classes - Number of Clojure function classes
-     :clojure-bytes   - Bytecode size of Clojure classes
-     :java-classes    - Number of non-Clojure classes
-     :java-bytes      - Bytecode size of non-Clojure classes"
-  []
-  (let [classes (get-loaded-classes)
-        total-size (reduce + 0 (vals classes))
-        clj-classes (filter (fn [[k _]] (clojure-class? k)) classes)
-        java-classes (remove (fn [[k _]] (clojure-class? k)) classes)]
-    {:total-classes (count classes)
-     :total-bytes total-size
-     :total-mb (/ total-size 1024.0 1024.0)
-     :clojure-classes (count clj-classes)
-     :clojure-bytes (reduce + 0 (map second clj-classes))
-     :java-classes (count java-classes)
-     :java-bytes (reduce + 0 (map second java-classes))}))
-
-(defn classes-by-namespace
-  "Group loaded classes by namespace.
-
-   Returns a map of namespace -> [{:class \"...\" :fn \"...\" :size N} ...]"
-  []
-  (let [classes (get-loaded-classes)]
-    (->> classes
-         (filter (fn [[k _]] (clojure-class? k)))
-         (map (fn [[class-name size]]
-                (assoc (parse-clojure-class class-name)
-                       :class class-name
-                       :size size)))
-         (group-by :ns))))
-
-(defn largest-classes
-  "Return the N largest classes by bytecode size.
-
-   Each entry is {:class \"...\" :size N :parsed {...}}"
-  ([] (largest-classes 20))
-  ([n]
-   (->> (get-loaded-classes)
-        (map (fn [[class-name size]]
-               {:class class-name
-                :size size
-                :parsed (parse-clojure-class class-name)}))
-        (sort-by :size >)
-        (take n))))
 
 ;;; ==========================================================================
 ;;; Unused Var Detection (via compiler hooks)
@@ -247,7 +126,7 @@
    Returns set of unused var symbols (qualified: ns/name).
 
    Note: Must be called AFTER loading the namespaces with the agent enabled.
-   Use capture-namespace or capture-namespaces to load and capture in one step."
+   Use capture-namespaces to load and capture in one step."
   [ns-syms]
   (let [;; Get all defined vars from runtime
         all-defs (into #{}
@@ -276,7 +155,7 @@
 
 (comment
 
-  ;; Compiler hook examples
+  ;; Captured defs
   (def captured (get-captured-defs))
 
   (->> captured
@@ -284,18 +163,7 @@
        distinct
        sort)
 
-  ;; Class loader examples
-  (runtime-footprint)
-
-  (largest-classes 10)
-
-  (->> (classes-by-namespace)
-       (map (fn [[ns classes]]
-              [ns (reduce + 0 (map :size classes))]))
-       (sort-by second >)
-       (take 10))
-
-  ;; Unused var detection via hooks
+  ;; Unused var detection
   ;; 1. Load namespaces with agent enabled
   (capture-namespaces '[clojure-compiler-treemap-view.fixtures.alpha clojure-compiler-treemap-view.analyze-test])
 
