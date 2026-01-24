@@ -67,7 +67,6 @@
       (is (seq opts))
       (is (every? :key opts))
       (is (every? :label opts))
-      (is (some #(= :loc (:key %)) opts))
       (is (some #(= :expressions-raw (:key %)) opts))
       (is (some #(= :max-depth-raw (:key %)) opts)))))
 

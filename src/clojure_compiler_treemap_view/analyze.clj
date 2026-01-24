@@ -59,15 +59,11 @@
 
    Raw form is the original source before macro expansion.
    Expanded form is after macro expansion (but still an s-expression, not AST)."
-  [raw-form expanded-form line end-line]
-  (let [loc (if (and line end-line)
-              (inc (- end-line line))
-              1)]
-    {:loc loc
-     :expressions-raw (if raw-form (count-sexp-forms raw-form) 0)
-     :expressions-expanded (if expanded-form (count-sexp-forms expanded-form) 0)
-     :max-depth-raw (if raw-form (sexp-max-depth raw-form) 0)
-     :max-depth-expanded (if expanded-form (sexp-max-depth expanded-form) 0)}))
+  [raw-form expanded-form]
+  {:expressions-raw (if raw-form (count-sexp-forms raw-form) 0)
+   :expressions-expanded (if expanded-form (count-sexp-forms expanded-form) 0)
+   :max-depth-raw (if raw-form (sexp-max-depth raw-form) 0)
+   :max-depth-expanded (if expanded-form (sexp-max-depth expanded-form) 0)})
 
 ;; ============================================================================
 ;; Processing Captured Defs
@@ -93,9 +89,7 @@
             :line (:line raw)
             :metrics (def-metrics-from-forms
                        (:form raw)
-                       (or (:form expanded) (:form raw))
-                       (:line raw)
-                       (:end-line raw))}))))
+                       (or (:form expanded) (:form raw)))}))))
 
 (defn- add-unused-flags
   "Add :unused? flag to each fn-data based on unused-vars set."

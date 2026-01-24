@@ -12,7 +12,7 @@ clj -M:agent
 ```clojure
 (require '[clojure-compiler-treemap-view.core :as cctv])
 (cctv/treemap! '[my.namespace])           ; opens browser
-(cctv/treemap! '[ns1 ns2] :size :loc :color :max-depth-expanded)
+(cctv/treemap! '[ns1 ns2] :size :expressions-raw :color :max-depth-expanded)
 ```
 
 ## Architecture
@@ -53,7 +53,6 @@ hook capture   unused detect   flat->tree      inject into template
 
 | Metric | Description |
 |--------|-------------|
-| `:loc` | Lines of code |
 | `:expressions-raw` | Form count from source (pre-macro-expansion) |
 | `:expressions-expanded` | Form count after macro-expansion |
 | `:max-depth-raw` | Nesting depth from source |
@@ -70,8 +69,7 @@ Raw vs expanded: Threading macros like `->` appear flat in raw metrics but neste
              :ns "my.namespace"
              :file nil   ; hooks don't capture file path
              :line 42
-             :metrics {:loc 5
-                       :expressions-raw 12
+             :metrics {:expressions-raw 12
                        :expressions-expanded 28
                        :max-depth-raw 2
                        :max-depth-expanded 4}}]

@@ -8,8 +8,7 @@
 
 (def ^:private metrics-options
   "Available metrics for size and color dropdowns."
-  [{:key :loc :label "Lines of Code"}
-   {:key :expressions-raw :label "Expressions (Raw)"}
+  [{:key :expressions-raw :label "Expressions (Raw)"}
    {:key :expressions-expanded :label "Expressions (Expanded)"}
    {:key :max-depth-raw :label "Max Depth (Raw)"}
    {:key :max-depth-expanded :label "Max Depth (Expanded)"}])

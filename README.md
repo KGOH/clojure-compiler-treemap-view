@@ -57,14 +57,13 @@ clj -M:agent
 (def tree (analyze/build-hierarchy data))
 
 ;; Render to HTML string (no browser)
-(def html (cctv/render-html tree :size :loc :color :max-depth-raw))
+(def html (cctv/render-html tree :size :expressions-raw :color :max-depth-raw))
 ```
 
 ## Available Metrics
 
 | Metric | Description |
 |--------|-------------|
-| `:loc` | Lines of code |
 | `:expressions-raw` | Form count from source (before macro expansion) |
 | `:expressions-expanded` | Form count (after macro expansion) |
 | `:max-depth-raw` | Nesting depth in source |
