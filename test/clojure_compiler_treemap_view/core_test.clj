@@ -38,11 +38,11 @@
 
 (deftest test-hierarchy-with-fixtures
   (testing "groups fixture namespaces correctly"
-    (let [fn-data (analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha
-                                          clojure-compiler-treemap-view.fixtures.alpha.utils
-                                          clojure-compiler-treemap-view.fixtures.alpha.handlers
-                                          clojure-compiler-treemap-view.fixtures.beta])
-          tree (analyze/build-hierarchy fn-data)
+    (let [{:keys [result]} (analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha
+                                                   clojure-compiler-treemap-view.fixtures.alpha.utils
+                                                   clojure-compiler-treemap-view.fixtures.alpha.handlers
+                                                   clojure-compiler-treemap-view.fixtures.beta])
+          tree (analyze/build-hierarchy result)
           ccv-node (first (filter #(= "clojure-compiler-treemap-view" (:name %)) (:children tree)))]
       (is ccv-node "should have clojure-compiler-treemap-view top-level")
 
@@ -63,8 +63,8 @@
 
 (deftest test-render-html-generates-valid-output
   (testing "render-html generates valid HTML"
-    (let [fn-data (analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha])
-          tree (analyze/build-hierarchy fn-data)
+    (let [{:keys [result]} (analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha])
+          tree (analyze/build-hierarchy result)
           content (core/render-html tree)]
       (is (str/includes? content "<!DOCTYPE html"))
       (is (str/includes? content "d3.v7.min.js"))
@@ -74,8 +74,8 @@
 
 (deftest test-render-html-with-options
   (testing "render-html respects options"
-    (let [fn-data (analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha])
-          tree (analyze/build-hierarchy fn-data)
+    (let [{:keys [result]} (analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha])
+          tree (analyze/build-hierarchy result)
           content (core/render-html tree :size :loc :color :max-depth-expanded)]
       (is (str/includes? content "const defaultSize = 'loc'"))
       (is (str/includes? content "const defaultColor = 'max-depth-expanded'")))))

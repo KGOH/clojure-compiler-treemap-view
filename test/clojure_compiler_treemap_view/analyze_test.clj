@@ -43,20 +43,21 @@
 
 (deftest test-analyze-ns
   (testing "returns function data for namespace with all metrics"
-    (let [fn-data (:analyzed (analyze/analyze-ns 'clojure-compiler-treemap-view.fixtures.alpha))]
-      (is (>= (count fn-data) 3))
-      (is (every? :name fn-data))
-      (is (every? :ns fn-data))
-      (is (every? :metrics fn-data))
-      (is (every? #(get-in % [:metrics :expressions-raw]) fn-data))
-      (is (every? #(get-in % [:metrics :expressions-expanded]) fn-data))
-      (is (every? #(get-in % [:metrics :max-depth-raw]) fn-data))
-      (is (every? #(get-in % [:metrics :max-depth-expanded]) fn-data)))))
+    (let [{:keys [result errors]} (analyze/analyze-ns 'clojure-compiler-treemap-view.fixtures.alpha)]
+      (is (= [] errors) "should have no errors")
+      (is (>= (count result) 3))
+      (is (every? :name result))
+      (is (every? :ns result))
+      (is (every? :metrics result))
+      (is (every? #(get-in % [:metrics :expressions-raw]) result))
+      (is (every? #(get-in % [:metrics :expressions-expanded]) result))
+      (is (every? #(get-in % [:metrics :max-depth-raw]) result))
+      (is (every? #(get-in % [:metrics :max-depth-expanded]) result)))))
 
 (deftest test-raw-vs-expanded-metrics
   (testing "raw metrics are less than expanded for threading macros"
-    (let [fn-data (:analyzed (analyze/analyze-ns 'clojure-compiler-treemap-view.fixtures.gamma))
-          threading (first (filter #(= "threading-simple" (:name %)) fn-data))]
+    (let [{:keys [result]} (analyze/analyze-ns 'clojure-compiler-treemap-view.fixtures.gamma)
+          threading (first (filter #(= "threading-simple" (:name %)) result))]
       ;; Raw depth should be less (threading is flat in source)
       (is (< (get-in threading [:metrics :max-depth-raw])
              (get-in threading [:metrics :max-depth-expanded]))))))
@@ -82,20 +83,21 @@
 
 (deftest test-analyze-nses
   (testing "adds unused? flag to metrics"
-    (let [fn-data (analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha
-                                          clojure-compiler-treemap-view.fixtures.alpha.utils
-                                          clojure-compiler-treemap-view.fixtures.alpha.handlers
-                                          clojure-compiler-treemap-view.fixtures.beta])
-          by-name (group-by :name fn-data)
+    (let [{:keys [result errors]} (analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha
+                                                          clojure-compiler-treemap-view.fixtures.alpha.utils
+                                                          clojure-compiler-treemap-view.fixtures.alpha.handlers
+                                                          clojure-compiler-treemap-view.fixtures.beta])
+          by-name (group-by :name result)
           unused (first (get by-name "unused-fn"))
           helper (first (get by-name "helper"))]
+      (is (= [] errors) "should have no errors")
       (is (get-in unused [:metrics :unused?]) "unused-fn should be marked unused")
       (is (not (get-in helper [:metrics :unused?])) "helper should not be marked unused"))))
 
 (deftest test-analyze-ns-metrics-format
   (testing "extracts all metrics in expected format"
-    (let [{:keys [analyzed]} (analyze/analyze-ns 'clojure-compiler-treemap-view.fixtures.alpha)
-          simple (first (filter #(= "simple-fn" (:name %)) analyzed))]
+    (let [{:keys [result]} (analyze/analyze-ns 'clojure-compiler-treemap-view.fixtures.alpha)
+          simple (first (filter #(= "simple-fn" (:name %)) result))]
       (is simple "simple-fn should be in analyzed results")
       (is (= "simple-fn" (:name simple)))
       (is (= "clojure-compiler-treemap-view.fixtures.alpha" (:ns simple)))
@@ -107,9 +109,37 @@
 (deftest test-analyze-multiple-namespaces
   (testing "can analyze multiple namespaces in one call"
     ;; This tests that analyze-ns properly filters to only the target namespace
-    (let [{:keys [analyzed]} (analyze/analyze-ns 'clojure-compiler-treemap-view.fixtures.beta)]
-      (is (seq analyzed) "should have some analyzed forms")
-      (doseq [fn-data analyzed]
+    (let [{:keys [result]} (analyze/analyze-ns 'clojure-compiler-treemap-view.fixtures.beta)]
+      (is (seq result) "should have some analyzed forms")
+      (doseq [fn-data result]
         (is (= "clojure-compiler-treemap-view.fixtures.beta" (:ns fn-data))
             (str "Expected ns clojure-compiler-treemap-view.fixtures.beta but got " (:ns fn-data)
                  " for " (:name fn-data)))))))
+
+;; ============================================================================
+;; Edge Case Tests
+;; ============================================================================
+
+(deftest test-analyze-empty-namespace
+  (testing "empty namespace returns empty results"
+    (let [{:keys [result errors]} (analyze/analyze-ns 'clojure-compiler-treemap-view.fixtures.empty)]
+      (is (= [] result))
+      (is (= [] errors)))))
+
+(deftest test-analyze-broken-namespace
+  (testing "broken namespace returns empty results with error"
+    (let [{:keys [result errors]} (analyze/analyze-ns 'clojure-compiler-treemap-view.fixtures.broken)]
+      (is (= [] result))
+      (is (= 1 (count errors)))
+      (is (= 'clojure-compiler-treemap-view.fixtures.broken (:ns (first errors)))))))
+
+(deftest test-build-hierarchy-empty
+  (testing "build-hierarchy handles empty input"
+    (is (= {:name "root" :children []} (analyze/build-hierarchy [])))))
+
+(deftest test-analyze-nses-with-broken
+  (testing "analyze-nses continues when one namespace fails"
+    (let [{:keys [result errors]} (analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha
+                                                          clojure-compiler-treemap-view.fixtures.broken])]
+      (is (seq result) "should have results from working namespace")
+      (is (some #(= 'clojure-compiler-treemap-view.fixtures.broken (:ns %)) errors)))))
