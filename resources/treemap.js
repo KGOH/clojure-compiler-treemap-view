@@ -331,13 +331,16 @@ function render() {
     if (d.data.metrics) {
       const val = d.data.metrics[colorKey];
       bgColor = (typeof val === 'number' && val !== null) ? colorScale(val) : '#073642';
-      // Function blocks get gradient from white to color
-      cell.style.background = `linear-gradient(315deg, #fdf6e3a0, ${bgColor})`;
+      const gradient = `linear-gradient(315deg, #fdf6e3a0, ${bgColor})`;
       if (d.data.metrics['failed?']) {
         cell.classList.add('failed');
       }
       if (d.data.metrics['unused?']) {
-        cell.classList.add('unused-pattern');
+        // Layer stripe pattern over gradient
+        const stripes = 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(0,0,0,0.4) 3px, rgba(0,0,0,0.4) 6px)';
+        cell.style.background = `${stripes}, ${gradient}`;
+      } else {
+        cell.style.background = gradient;
       }
     } else {
       // Namespace container - use solid light solarized color
