@@ -17,7 +17,8 @@
 
      ;; Find unused vars
      (agent/find-unused-vars ns-syms)"
-  (:require [clojure.set :as set])
+  (:require [clojure-compiler-treemap-view.require-agent] ;; Validates agent is loaded
+            [clojure.set :as set])
   (:import [clojure.metrics MetricsBridge ClassLoadBridge VarRefBridge]))
 
 ;; ==========================================================================
