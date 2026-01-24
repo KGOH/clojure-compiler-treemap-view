@@ -9,6 +9,13 @@
             [clojure.string :as str]))
 
 ;; ============================================================================
+;; Constants
+;; ============================================================================
+
+(def ^:const phase-raw "raw")
+(def ^:const phase-expanded "expanded")
+
+;; ============================================================================
 ;; Error Tracking
 ;; ============================================================================
 
@@ -80,8 +87,8 @@
   (let [by-ns-and-name (group-by (juxt :ns :name) captured)]
     (vec (for [[[ns-str name] forms] by-ns-and-name
                :when (or (nil? ns-strs) (contains? ns-strs ns-str))
-               :let [raw (first (filter #(= "raw" (:phase %)) forms))
-                     expanded (first (filter #(= "expanded" (:phase %)) forms))]
+               :let [raw (first (filter #(= phase-raw (:phase %)) forms))
+                     expanded (first (filter #(= phase-expanded (:phase %)) forms))]
                :when raw]
            {:name name
             :ns ns-str
