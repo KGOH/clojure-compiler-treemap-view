@@ -76,6 +76,25 @@
   (testing "render-html respects options"
     (let [{:keys [result]} (analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha])
           tree (analyze/build-hierarchy result)
-          content (core/render-html tree :size :loc :color :max-depth-expanded)]
-      (is (str/includes? content "const defaultSize = 'loc'"))
+          content (core/render-html tree :size :expressions-expanded :color :max-depth-expanded)]
+      (is (str/includes? content "const defaultSize = 'expressions-expanded'"))
       (is (str/includes? content "const defaultColor = 'max-depth-expanded'")))))
+
+(deftest test-treemap-validates-metric-keys
+  (testing "treemap! throws helpful error for invalid size metric"
+    (let [ex (try
+               (core/treemap! '[clojure-compiler-treemap-view.fixtures.alpha] :size :typo)
+               nil
+               (catch Exception e e))]
+      (is (some? ex) "should throw for invalid metric")
+      (is (str/includes? (ex-message ex) "Invalid :size metric"))
+      (is (str/includes? (ex-message ex) ":typo"))
+      (is (str/includes? (ex-message ex) ":expressions-raw"))))
+  (testing "treemap! throws helpful error for invalid color metric"
+    (let [ex (try
+               (core/treemap! '[clojure-compiler-treemap-view.fixtures.alpha] :color :bad-key)
+               nil
+               (catch Exception e e))]
+      (is (some? ex) "should throw for invalid metric")
+      (is (str/includes? (ex-message ex) "Invalid :color metric"))
+      (is (str/includes? (ex-message ex) ":bad-key")))))

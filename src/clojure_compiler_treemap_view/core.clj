@@ -13,6 +13,20 @@
    {:key :max-depth-raw :label "Max Depth (Raw)"}
    {:key :max-depth-expanded :label "Max Depth (Expanded)"}])
 
+(def ^:private valid-metric-keys
+  "Set of valid metric keys for validation."
+  (into #{} (map :key metrics-options)))
+
+(defn- validate-metric-key!
+  "Throws if key is not a valid metric. Used for :size and :color options."
+  [key param-name]
+  (when-not (contains? valid-metric-keys key)
+    (throw (ex-info (str "Invalid " param-name " metric: " key
+                         ". Valid options: " (pr-str (sort valid-metric-keys)))
+                    {:param param-name
+                     :value key
+                     :valid-options valid-metric-keys}))))
+
 (defn- slurp-resource
   "Slurp a resource file from the resources directory."
   [filename]
@@ -62,6 +76,8 @@
   [ns-syms & {:keys [size color]
               :or {size :expressions-raw
                    color :max-depth-raw}}]
+  (validate-metric-key! size :size)
+  (validate-metric-key! color :color)
   (let [{:keys [result errors]} (analyze/analyze-nses ns-syms)
         file-path (-> result
                       analyze/build-hierarchy
