@@ -114,21 +114,16 @@
    Options:
      :ns-syms - Optional collection of namespace symbols to filter by.
                 If nil, processes all captured defs.
-     :unused? - If true, adds :unused? flags using current var references.
-                Requires namespaces to already be loaded.
 
    Returns vector of fn-data maps (same format as analyze-nses)."
-  [& {:keys [ns-syms unused?]
-      :or {unused? false}}]
+  [& {:keys [ns-syms]}]
   (let [captured (agent/peek-captured-defs)
         ns-strs (when ns-syms (set (map str ns-syms)))
-        fn-data (process-captured-defs captured ns-strs)]
-    (if unused?
-      (let [nses-to-check (or ns-syms
-                              (->> fn-data (map :ns) distinct (map symbol)))
-            unused-vars (agent/find-unused-vars nses-to-check)]
-        (add-unused-flags fn-data unused-vars))
-      fn-data)))
+        fn-data (process-captured-defs captured ns-strs)
+        nses-to-check (or ns-syms
+                          (->> fn-data (map :ns) distinct (map symbol)))
+        unused-vars (agent/find-unused-vars nses-to-check)]
+    (add-unused-flags fn-data unused-vars)))
 
 ;; ============================================================================
 ;; Namespace Analysis via Hooks (with reload)
