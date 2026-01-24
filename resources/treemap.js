@@ -3,6 +3,18 @@ const metricsOptions = {{OPTIONS}};
 const defaultSize = '{{DEFAULT_SIZE}}';
 const defaultColor = '{{DEFAULT_COLOR}}';
 
+// Pre-compute childrenByName maps for O(1) child lookup
+function buildChildMaps(node) {
+  if (node.children) {
+    node.childrenByName = new Map();
+    for (const child of node.children) {
+      node.childrenByName.set(child.name, child);
+      buildChildMaps(child);
+    }
+  }
+}
+buildChildMaps(data);
+
 // State
 let currentNode = data;
 let pathStack = [];
@@ -151,7 +163,7 @@ function selectSuggestion(match) {
   pathStack = path;
   currentNode = data;
   for (const name of pathStack) {
-    currentNode = currentNode.children.find(c => c.name === name);
+    currentNode = currentNode.childrenByName.get(name);
   }
   render();
 }
@@ -248,7 +260,7 @@ function navigateToLevel(idx) {
   pathStack = pathStack.slice(0, idx + 1);
   currentNode = data;
   for (const name of pathStack) {
-    currentNode = currentNode.children.find(c => c.name === name);
+    currentNode = currentNode.childrenByName.get(name);
   }
   render();
 }
@@ -419,14 +431,22 @@ function render() {
         pathStack = [...pathStack, ...newPathParts];
         currentNode = data;
         for (const name of pathStack) {
-          currentNode = currentNode.children.find(c => c.name === name);
+          currentNode = currentNode.childrenByName.get(name);
         }
         render();
       } else {
         // Normal click - drill one level deeper
-        const nextNode = currentNode.children?.find(c =>
-          ancestors.some(a => a.data.name === c.name)
-        );
+        // Find which child of currentNode is an ancestor of clicked cell
+        let nextNode;
+        if (currentNode.childrenByName) {
+          for (const a of ancestors) {
+            const child = currentNode.childrenByName.get(a.data.name);
+            if (child) {
+              nextNode = child;
+              break;
+            }
+          }
+        }
         if (nextNode && nextNode.children) {
           drillDown(nextNode);
         }
@@ -574,7 +594,7 @@ window.addEventListener('keydown', (e) => {
       pathStack.pop();
       currentNode = data;
       for (const name of pathStack) {
-        currentNode = currentNode.children.find(c => c.name === name);
+        currentNode = currentNode.childrenByName.get(name);
       }
       render();
     }
