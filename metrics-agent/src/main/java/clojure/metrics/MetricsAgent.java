@@ -110,24 +110,14 @@ public class MetricsAgent {
             .type(ElementMatchers.named("clojure.lang.Compiler"))
             .transform((builder, typeDescription, classLoader, module, protectionDomain) ->
                 builder
-                    // OLD: Hook analyzeSeq for post-expansion capture (phase="expanded")
-                    .visit(Advice.to(CompilerAdvice.class)
-                        .on(ElementMatchers.named("analyzeSeq")
-                            .and(ElementMatchers.isPrivate())
-                            .and(ElementMatchers.isStatic())))
-                    // OLD: Hook macroexpand for pre-expansion capture (phase="raw")
-                    .visit(Advice.to(MacroexpandAdvice.class)
-                        .on(ElementMatchers.named("macroexpand")
-                            .and(ElementMatchers.isStatic())
-                            .and(ElementMatchers.takesArguments(1))))
-                    // NEW: Unified hook on macroexpand (captures both raw and expanded)
+                    // Unified hook on macroexpand: captures both raw (enter) and expanded (exit)
                     .visit(Advice.to(MacroexpandUnifiedAdvice.class)
                         .on(ElementMatchers.named("macroexpand")
                             .and(ElementMatchers.isStatic())
                             .and(ElementMatchers.takesArguments(1)))))
             .installOn(inst);
 
-        if (VERBOSE) System.out.println("[MetricsAgent] Compiler hooks installed (old + new)");
+        if (VERBOSE) System.out.println("[MetricsAgent] Compiler hook installed");
     }
 
     /**

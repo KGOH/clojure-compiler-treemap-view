@@ -149,26 +149,26 @@ public class MacroexpandUnifiedAdvice {
             // Get line and namespace
             Integer line = null;
             Integer endLine = null;
-            String ns = CompilerAdvice.getCurrentNamespace();
+            String ns = CompilerUtils.getCurrentNamespace();
 
-            Object meta = CompilerAdvice.getMetadata(form);
+            Object meta = CompilerUtils.getMetadata(form);
             if (meta != null) {
-                line = CompilerAdvice.getMetaInt(meta, "line");
-                endLine = CompilerAdvice.getMetaInt(meta, "end-line");
+                line = CompilerUtils.getMetaInt(meta, "line");
+                endLine = CompilerUtils.getMetaInt(meta, "end-line");
             }
 
-            Object nameMeta = CompilerAdvice.getMetadata(nameSymbol);
+            Object nameMeta = CompilerUtils.getMetadata(nameSymbol);
             if (nameMeta != null) {
                 if (line == null) {
-                    line = CompilerAdvice.getMetaInt(nameMeta, "line");
+                    line = CompilerUtils.getMetaInt(nameMeta, "line");
                 }
                 if (endLine == null) {
-                    endLine = CompilerAdvice.getMetaInt(nameMeta, "end-line");
+                    endLine = CompilerUtils.getMetaInt(nameMeta, "end-line");
                 }
             }
 
             if (line == null) {
-                line = CompilerAdvice.getCompilerLine();
+                line = CompilerUtils.getCompilerLine();
             }
 
             // Build captured info
@@ -185,8 +185,7 @@ public class MacroexpandUnifiedAdvice {
                 defInfo.put("end-line", endLine);
             }
 
-            // Capture to NEW buffer
-            MetricsBridge.captureNew(defInfo);
+            MetricsBridge.capture(defInfo);
 
         } catch (Exception e) {
             // Silently ignore

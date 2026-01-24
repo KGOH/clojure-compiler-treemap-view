@@ -9,31 +9,21 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 /**
  * Bridge between the Java agent and Clojure code.
  *
- * Captured def information is buffered in thread-safe queues
+ * Captured def information is buffered in a thread-safe queue
  * and can be drained by Clojure code via the static API.
- *
- * During migration, we maintain two buffers:
- * - BUFFER_OLD: captures from old hooks (MacroexpandAdvice + CompilerAdvice)
- * - BUFFER_NEW: captures from new unified hook (MacroexpandUnifiedAdvice)
  *
  * Usage from Clojure:
  *   (import '[clojure.metrics MetricsBridge])
- *   (MetricsBridge/drainBufferOld)  ; old implementation
- *   (MetricsBridge/drainBufferNew)  ; new implementation
- *   (MetricsBridge/drainBuffer)     ; alias for old (for compatibility)
+ *   (MetricsBridge/drainBuffer)  ; returns and clears all captured defs
+ *   (MetricsBridge/peekBuffer)   ; returns without clearing
  */
 public class MetricsBridge {
 
     /**
-     * Buffer for OLD implementation (MacroexpandAdvice + CompilerAdvice)
+     * Thread-safe buffer for captured def information.
+     * Each entry is a Map with keys: phase, op, name, ns, line, end-line, form
      */
-    private static final ConcurrentLinkedQueue<Map<String, Object>> BUFFER_OLD =
-        new ConcurrentLinkedQueue<>();
-
-    /**
-     * Buffer for NEW implementation (MacroexpandUnifiedAdvice)
-     */
-    private static final ConcurrentLinkedQueue<Map<String, Object>> BUFFER_NEW =
+    private static final ConcurrentLinkedQueue<Map<String, Object>> BUFFER =
         new ConcurrentLinkedQueue<>();
 
     /**
@@ -42,103 +32,55 @@ public class MetricsBridge {
     private static volatile boolean enabled = true;
 
     /**
-     * Capture to OLD buffer. Called by MacroexpandAdvice and CompilerAdvice.
-     */
-    public static void captureOld(Map<String, Object> defInfo) {
-        if (enabled && defInfo != null) {
-            BUFFER_OLD.offer(defInfo);
-        }
-    }
-
-    /**
-     * Capture to NEW buffer. Called by MacroexpandUnifiedAdvice.
-     */
-    public static void captureNew(Map<String, Object> defInfo) {
-        if (enabled && defInfo != null) {
-            BUFFER_NEW.offer(defInfo);
-        }
-    }
-
-    /**
-     * Legacy capture method - routes to OLD buffer for compatibility.
+     * Capture a def form. Called by MacroexpandUnifiedAdvice.
+     *
+     * @param defInfo Map containing def metadata
      */
     public static void capture(Map<String, Object> defInfo) {
-        captureOld(defInfo);
-    }
-
-    /**
-     * Drain OLD buffer.
-     */
-    public static List<Map<String, Object>> drainBufferOld() {
-        List<Map<String, Object>> result = new ArrayList<>();
-        Map<String, Object> item;
-        while ((item = BUFFER_OLD.poll()) != null) {
-            result.add(item);
+        if (enabled && defInfo != null) {
+            BUFFER.offer(defInfo);
         }
-        return result;
     }
 
     /**
-     * Drain NEW buffer.
-     */
-    public static List<Map<String, Object>> drainBufferNew() {
-        List<Map<String, Object>> result = new ArrayList<>();
-        Map<String, Object> item;
-        while ((item = BUFFER_NEW.poll()) != null) {
-            result.add(item);
-        }
-        return result;
-    }
-
-    /**
-     * Legacy drain - routes to OLD buffer for compatibility.
+     * Drain and return all captured defs, clearing the buffer.
+     * This is the primary API for Clojure code.
+     *
+     * @return List of captured def maps
      */
     public static List<Map<String, Object>> drainBuffer() {
-        return drainBufferOld();
+        List<Map<String, Object>> result = new ArrayList<>();
+        Map<String, Object> item;
+        while ((item = BUFFER.poll()) != null) {
+            result.add(item);
+        }
+        return result;
     }
 
     /**
-     * Peek OLD buffer.
-     */
-    public static List<Map<String, Object>> peekBufferOld() {
-        return Collections.unmodifiableList(new ArrayList<>(BUFFER_OLD));
-    }
-
-    /**
-     * Peek NEW buffer.
-     */
-    public static List<Map<String, Object>> peekBufferNew() {
-        return Collections.unmodifiableList(new ArrayList<>(BUFFER_NEW));
-    }
-
-    /**
-     * Legacy peek - routes to OLD buffer for compatibility.
+     * Peek at captured defs without clearing the buffer.
+     * Useful for debugging or inspection.
+     *
+     * @return Unmodifiable list of captured def maps
      */
     public static List<Map<String, Object>> peekBuffer() {
-        return peekBufferOld();
+        return Collections.unmodifiableList(new ArrayList<>(BUFFER));
     }
 
     /**
-     * Clear both buffers.
+     * Clear the buffer without returning contents.
      */
     public static void clearBuffer() {
-        BUFFER_OLD.clear();
-        BUFFER_NEW.clear();
+        BUFFER.clear();
     }
 
     /**
-     * Get combined buffer size.
+     * Get the current buffer size.
+     *
+     * @return Number of captured defs in buffer
      */
     public static int bufferSize() {
-        return BUFFER_OLD.size() + BUFFER_NEW.size();
-    }
-
-    public static int bufferSizeOld() {
-        return BUFFER_OLD.size();
-    }
-
-    public static int bufferSizeNew() {
-        return BUFFER_NEW.size();
+        return BUFFER.size();
     }
 
     /**
