@@ -74,6 +74,8 @@
 
 
 (comment
+  (def analyzed (analyze/analyze-captured))
+
   (def nses
     (->> (all-ns)
          (map ns-name)))

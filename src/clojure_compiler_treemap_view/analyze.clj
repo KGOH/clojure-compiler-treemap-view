@@ -1,8 +1,11 @@
 (ns clojure-compiler-treemap-view.analyze
-  "AST walking and metrics extraction for code visualization."
-  (:require [clojure.tools.analyzer.jvm :as ana.jvm]
-            [clojure.tools.analyzer.ast :as ast]
-            [clojure.set :as set]
+  "Namespace analysis and metrics extraction using compiler hooks.
+
+   This namespace provides functions to analyze Clojure namespaces by
+   capturing def forms during compilation via the metrics agent. It
+   extracts metrics like lines of code, expression counts, nesting depth,
+   and identifies unused vars."
+  (:require [clojure-compiler-treemap-view.agent :as agent]
             [clojure.string :as str]))
 
 ;; ============================================================================
@@ -17,19 +20,6 @@
 (defn clear-errors! []
   (reset! errors []))
 
-(defn reset-analyzer!
-  "Reset analyzer state to fix protocol cache invalidation.
-   Call this if you get 'No implementation of method: :do-reflect' errors."
-  []
-  ;; Reload clojure.reflect to fix protocol dispatch cache
-  (require 'clojure.reflect :reload)
-  ;; Clear memoized reflection cache in tools.analyzer.jvm.utils
-  (when-let [members-var (resolve 'clojure.tools.analyzer.jvm.utils/members*)]
-    (try
-      ((requiring-resolve 'clojure.core.memoize/memo-clear!) @members-var)
-      (catch Exception _)))
-  :reset)
-
 (defn- record-error! [ns-sym phase exception]
   (swap! errors conj {:ns ns-sym
                       :phase phase
@@ -38,7 +28,7 @@
                       :timestamp (System/currentTimeMillis)}))
 
 ;; ============================================================================
-;; S-Expression Counters (for raw forms)
+;; S-Expression Counters
 ;; ============================================================================
 
 (defn count-sexp-forms
@@ -61,311 +51,146 @@
     :else              0))
 
 ;; ============================================================================
-;; AST Walking Utilities
+;; Metrics from Captured Forms
 ;; ============================================================================
 
-(defn ast-children
-  "Get child nodes from an AST node via :children key."
-  [node]
-  (mapcat (fn [k]
-            (let [v (get node k)]
-              (if (sequential? v) v [v])))
-          (:children node)))
+(defn- def-metrics-from-forms
+  "Compute metrics from raw+expanded form pair.
 
-(defn count-nodes
-  "Count total expression nodes in AST."
-  [ast]
-  (count (ast/nodes ast)))
-
-(defn max-if-depth
-  "Find maximum nesting depth of :if nodes."
-  [ast]
-  (letfn [(depth [node current-depth]
-            (let [is-if (= :if (:op node))
-                  new-depth (if is-if (inc current-depth) current-depth)
-                  children (ast-children node)
-                  child-depths (map #(depth % new-depth) children)]
-              (if (seq child-depths)
-                (apply max new-depth child-depths)
-                new-depth)))]
-    (depth ast 0)))
-
-(defn cyclomatic-complexity
-  "Calculate cyclomatic complexity: count of decision points + 1.
-   Decision points: :if :case :try :catch"
-  [ast]
-  (let [decision-ops #{:if :case :try :catch}
-        nodes (ast/nodes ast)
-        decisions (count (filter #(decision-ops (:op %)) nodes))]
-    (inc decisions)))
-
-(defn count-allocations
-  "Count allocation nodes: :new :vector :map :set :with-meta (for literals)."
-  [ast]
-  (let [alloc-ops #{:new :vector :map :set}
-        nodes (ast/nodes ast)]
-    (count (filter #(alloc-ops (:op %)) nodes))))
-
-;; ============================================================================
-;; Hybrid Counters (raw forms aware)
-;; ============================================================================
-
-(defn- original-form
-  "Get the original (pre-expansion) form from :raw-forms.
-   For macro-expanded nodes, second element is the original macro invocation.
-   For non-macro nodes, there's only one element."
-  [raw-forms]
-  (or (second raw-forms) (first raw-forms)))
-
-(def ^:private macro-expanded-ops
-  "Ops that represent actual macro-expanded code (not structural wrappers).
-   Only these ops should use :raw-forms for raw metrics.
-
-   Why these ops:
-   - :invoke/:static-call/:instance-call - function calls, often from threading macros
-   - :do - block expressions, common in let/when/cond expansions
-
-   Excluded ops like :fn, :let, :local don't typically carry meaningful
-   :raw-forms from macro expansion."
-  #{:static-call :invoke :instance-call :do})
-
-(defn- use-raw-forms?
-  "Should we use :raw-forms for this node?"
-  [ast]
-  (and (seq (:raw-forms ast))
-       (macro-expanded-ops (:op ast))))
-
-(defn count-expressions
-  "Count expressions. When raw?, treat macro-expanded nodes as single units."
-  [ast raw?]
-  (if (and raw? (use-raw-forms? ast))
-    ;; For raw mode: count this macro expansion as 1 expression (don't recurse into expanded children)
-    1
-    (let [children (ast-children ast)]
-      (reduce + 1 (map #(count-expressions % raw?) children)))))
-
-(defn max-depth
-  "Max nesting depth. When raw?, use :raw-forms where available."
-  [ast raw?]
-  (if (and raw? (use-raw-forms? ast))
-    (sexp-max-depth (original-form (:raw-forms ast)))
-    (let [children (ast-children ast)]
-      (if (seq children)
-        (inc (reduce max 0 (map #(max-depth % raw?) children)))
-        0))))
-
-;; ============================================================================
-;; Per-definition Metrics
-;; ============================================================================
-
-(defn def-metrics
-  "Extract all metrics for a single :def node.
-   Returns map with :name :ns :file :line :metrics
-   Metrics include both raw (pre-expansion) and expanded (post-expansion) variants."
-  [def-node]
-  (let [{:keys [name env init]} def-node
-        {:keys [ns file line end-line]} env
-        loc (if (and line end-line)
+   Raw form is the original source before macro expansion.
+   Expanded form is after macro expansion (but still an s-expression, not AST)."
+  [raw-form expanded-form line end-line]
+  (let [loc (if (and line end-line)
               (inc (- end-line line))
-              1)
-        ;; Raw form from top-level :raw-forms (contains unexpanded macros)
-        raw-form (when (and init (seq (:raw-forms init)))
-                   (original-form (:raw-forms init)))]
-    {:name (str name)
-     :ns (str ns)
-     :file file
-     :line line
-     :metrics {:loc loc
-               ;; Raw metrics (from source as written)
-               :expressions-raw (if raw-form
-                                  (count-sexp-forms raw-form)
-                                  0)
-               :max-depth-raw (if raw-form
-                                (sexp-max-depth raw-form)
-                                0)
-               ;; Expanded metrics (from AST after macro expansion)
-               :expressions-expanded (if init
-                                       (count-expressions init false)
-                                       0)
-               :max-depth-expanded (if init
-                                     (max-depth init false)
-                                     0)}}))
+              1)]
+    {:loc loc
+     :expressions-raw (if raw-form (count-sexp-forms raw-form) 0)
+     :expressions-expanded (if expanded-form (count-sexp-forms expanded-form) 0)
+     :max-depth-raw (if raw-form (sexp-max-depth raw-form) 0)
+     :max-depth-expanded (if expanded-form (sexp-max-depth expanded-form) 0)}))
 
 ;; ============================================================================
-;; Unused Code Detection
+;; Processing Captured Defs
 ;; ============================================================================
 
-(defn extract-var-defs
-  "Extract set of defined var symbols from AST nodes."
-  [nodes]
-  (into #{}
-        (comp (filter #(= :def (:op %)))
-              (map #(symbol (-> % :var .toSymbol))))
-        nodes))
+(defn- process-captured-defs
+  "Transform captured def forms into analyzed metrics.
 
-(defn extract-var-refs
-  "Extract set of referenced var symbols from AST nodes."
-  [nodes]
-  (into #{}
-        (comp (filter #(#{:var :the-var} (:op %)))
-              (keep (fn [node]
-                      (when-let [v (:var node)]
-                        (symbol (.toSymbol v))))))
-        nodes))
+   Takes a sequence of captured defs (from agent/get-captured-defs) and
+   optional set of namespace strings to filter by.
 
-(defn find-unused-vars
-  "Find vars that are defined but never referenced.
-   Returns set of unused var symbols."
-  [asts]
-  (let [all-nodes (mapcat ast/nodes asts)
-        defs (extract-var-defs all-nodes)
-        refs (extract-var-refs all-nodes)]
-    (set/difference defs refs)))
+   Returns vector of maps with :name :ns :file :line :metrics"
+  [captured ns-strs]
+  (let [by-ns-and-name (group-by (juxt :ns :name) captured)]
+    (vec (for [[[ns-str name] forms] by-ns-and-name
+               :when (or (nil? ns-strs) (contains? ns-strs ns-str))
+               :let [raw (first (filter #(= "raw" (:phase %)) forms))
+                     expanded (first (filter #(= "expanded" (:phase %)) forms))]
+               :when raw]
+           {:name name
+            :ns ns-str
+            :file nil
+            :line (:line raw)
+            :metrics (def-metrics-from-forms
+                       (:form raw)
+                       (or (:form expanded) (:form raw))
+                       (:line raw)
+                       (:end-line raw))}))))
+
+(defn- add-unused-flags
+  "Add :unused? flag to each fn-data based on unused-vars set."
+  [fn-data-seq unused-vars]
+  (mapv (fn [{:keys [ns name] :as fn-data}]
+          (let [full-name (str ns "/" name)
+                unused? (contains? unused-vars full-name)]
+            (assoc-in fn-data [:metrics :unused?] unused?)))
+        fn-data-seq))
 
 ;; ============================================================================
-;; Namespace Analysis
+;; Analyze Captured (no reload)
 ;; ============================================================================
 
-(defn- skip-namespace?
-  "Returns true for namespaces that break tools.analyzer.jvm when analyzed.
-   These include the analyzer itself, namespaces it depends on."
-  [ns-sym]
-  (let [ns-str (str ns-sym)]
-    (or (str/starts-with? ns-str "clojure.tools.analyzer")
-        (str/starts-with? ns-str "clojure.spec")
-        (str/starts-with? ns-str "clojure.core.memoize")
-        (str/starts-with? ns-str "clojure.core.cache")
-        (str/starts-with? ns-str "clojure.core.specs")
-        (= ns-str "clojure.reflect"))))
+(defn analyze-captured
+  "Analyze already-captured def forms without reloading namespaces.
 
-(defn- ns-source-path
-  "Get resource path for namespace source file."
-  [ns-sym]
-  (-> (str ns-sym)
-      (str/replace "." "/")
-      (str/replace "-" "_")
-      (str ".clj")))
+   Processes whatever is currently in the agent's capture buffer.
+   Useful when forms were captured during normal REPL usage.
 
-(defn- read-all-forms
-  "Read all forms from a reader."
-  [rdr]
-  (let [eof (Object.)]
-    (loop [forms []]
-      (let [form (read {:eof eof} rdr)]
-        (if (identical? form eof)
-          forms
-          (recur (conj forms form)))))))
+   Options:
+     :ns-syms - Optional collection of namespace symbols to filter by.
+                If nil, processes all captured defs.
+     :drain?  - If true (default), drains the buffer. If false, peeks.
+     :unused? - If true, adds :unused? flags using current var references.
+                Requires namespaces to already be loaded.
 
-(defn- def-form?
-  "Check if form is a def-like form."
-  [form]
-  (and (seq? form)
-       (symbol? (first form))
-       (contains? #{'def 'defn 'defn- 'defmacro 'defonce 'defmulti 'defmethod}
-                  (first form))))
+   Returns vector of fn-data maps (same format as analyze-nses)."
+  [& {:keys [ns-syms drain? unused?]
+      :or {drain? true unused? false}}]
+  (let [captured (if drain?
+                   (agent/get-captured-defs)
+                   (agent/peek-captured-defs))
+        ns-strs (when ns-syms (set (map str ns-syms)))
+        fn-data (process-captured-defs captured ns-strs)]
+    (if unused?
+      (let [;; Determine which namespaces to check for unused
+            nses-to-check (or ns-syms
+                              (->> fn-data (map :ns) distinct (map symbol)))
+            unused-vars (agent/find-unused-vars nses-to-check)]
+        (add-unused-flags fn-data unused-vars))
+      fn-data)))
 
-(defn- def-form-name
-  "Extract name from a def form."
-  [form]
-  (when (def-form? form)
-    (second form)))
-
-(defn- form-metrics-from-sexp
-  "Calculate metrics from s-expression (reader fallback)."
-  [form ns-sym]
-  (let [name (def-form-name form)
-        body (drop 2 form)  ;; skip def name, get body
-        body-form (if (string? (first body)) (rest body) body)  ;; skip docstring
-        body-form (if (map? (first body-form)) (rest body-form) body-form)]  ;; skip attr-map
-    {:name (str name)
-     :ns (str ns-sym)
-     :file nil
-     :line nil
-     :metrics {:loc (count (str/split-lines (pr-str form)))
-               :expressions-raw (count-sexp-forms form)
-               :expressions-expanded nil
-               :max-depth-raw (sexp-max-depth form)
-               :max-depth-expanded nil
-               :failed? true}}))
-
-(defn- analyze-form-with-fallback
-  "Try to analyze a single form with ana.jvm/analyze, fall back to reader metrics."
-  [form ns-sym env]
-  (if-not (def-form? form)
-    nil  ;; skip non-def forms
-    (try
-      (let [ast (ana.jvm/analyze form env)
-            defs (filter #(= :def (:op %)) (ast/nodes ast))]
-        (when (seq defs)
-          (def-metrics (first defs))))
-      (catch Throwable _
-        (form-metrics-from-sexp form ns-sym)))))
-
-(defn- analyze-ns-via-reader
-  "Analyze namespace by reading source and analyzing each form individually."
-  [ns-sym]
-  (try
-    (require ns-sym)
-    (let [resource (clojure.java.io/resource (ns-source-path ns-sym))
-          the-ns (find-ns ns-sym)]
-      (if (and resource the-ns)
-        (binding [*ns* the-ns]
-          (let [env (ana.jvm/empty-env)]
-            (with-open [rdr (java.io.PushbackReader. (clojure.java.io/reader resource))]
-              (let [forms (read-all-forms rdr)]
-                (->> forms
-                     (keep #(analyze-form-with-fallback % ns-sym env))
-                     vec)))))
-        []))
-    (catch Throwable e
-      (record-error! ns-sym :analyze-via-reader e)
-      [])))
+;; ============================================================================
+;; Namespace Analysis via Hooks (with reload)
+;; ============================================================================
 
 (defn analyze-ns
-  "Analyze a single namespace, returning seq of function data maps.
-   Each map has :name :ns :file :line :metrics
-   Tries analyze-ns first, then falls back to per-form analysis.
-   Returns {:analyzed [...] :asts [...]} map."
+  "Analyze a single namespace using compiler hooks.
+
+   Clears the capture buffer, reloads the namespace (triggering compilation),
+   then processes the captured def forms into metrics.
+
+   Returns {:analyzed [...] :asts []}
+   Note: :asts is always empty (maintained for API compatibility).
+
+   Each analyzed entry contains:
+     :name    - Var name (string)
+     :ns      - Namespace (string)
+     :file    - Source file (nil - hooks don't capture this)
+     :line    - Line number
+     :metrics - Map of metrics"
   [ns-sym]
-  (if (skip-namespace? ns-sym)
-    {:analyzed (analyze-ns-via-reader ns-sym)
-     :asts []}
-    (try
-      (require ns-sym)
-      (let [asts (ana.jvm/analyze-ns ns-sym)]
-        (if (seq asts)
-          (let [defs (filter #(= :def (:op %)) asts)]
-            {:analyzed (mapv def-metrics defs)
-             :asts asts})
-          ;; Empty result, try per-form analysis
-          (do
-            (record-error! ns-sym :analyze (ex-info "analyze-ns returned empty, trying per-form" {:ns ns-sym}))
-            {:analyzed (analyze-ns-via-reader ns-sym)
-             :asts []})))
-      (catch Throwable e
-        (record-error! ns-sym :analyze e)
-        ;; Fall back to per-form analysis
-        {:analyzed (analyze-ns-via-reader ns-sym)
-         :asts []}))))
+  (try
+    (agent/clear!)
+    (require ns-sym :reload)
+    (let [captured (agent/get-captured-defs)
+          ns-strs #{(str ns-sym)}]
+      {:analyzed (process-captured-defs captured ns-strs)
+       :asts []})
+    (catch Throwable e
+      (record-error! ns-sym :analyze e)
+      {:analyzed [] :asts []})))
 
 (defn analyze-nses
-  "Analyze multiple namespaces.
-   Returns seq of function data maps.
-   Failed forms are included with :failed? true in metrics.
-   Unused code detection is always performed, adding :unused? to metrics."
+  "Analyze multiple namespaces using compiler hooks.
+
+   This clears both capture buffers, loads all namespaces (in order),
+   then processes captured defs and marks unused vars.
+
+   Returns seq of function data maps, each with :unused? in metrics."
   [ns-syms]
-  (let [results (mapv analyze-ns ns-syms)
-        all-fn-data (vec (mapcat :analyzed results))
-        all-asts (mapcat :asts results)
-        unused-vars (find-unused-vars all-asts)
-        unused-var-strs (into #{} (map str) unused-vars)]
-    (mapv (fn [{:keys [ns name] :as fn-data}]
-            (if (get-in fn-data [:metrics :failed?])
-              fn-data  ;; don't mark failed as unused
-              (let [full-name (str ns "/" name)
-                    unused? (contains? unused-var-strs full-name)]
-                (assoc-in fn-data [:metrics :unused?] unused?))))
-          all-fn-data)))
+  (try
+    (agent/clear!)
+    (agent/clear-var-references!)
+    (doseq [ns-sym ns-syms]
+      (require ns-sym :reload))
+    (let [captured (agent/get-captured-defs)
+          ns-strs (set (map str ns-syms))
+          fn-data (process-captured-defs captured ns-strs)
+          unused-vars (agent/find-unused-vars ns-syms)]
+      (add-unused-flags fn-data unused-vars))
+    (catch Throwable e
+      (record-error! (first ns-syms) :analyze-nses e)
+      [])))
 
 ;; ============================================================================
 ;; Hierarchy Building

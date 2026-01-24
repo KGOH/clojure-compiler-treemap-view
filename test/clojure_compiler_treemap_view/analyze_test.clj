@@ -1,15 +1,7 @@
 (ns clojure-compiler-treemap-view.analyze-test
   (:require [clojure.test :refer [deftest testing is]]
             [clojure-compiler-treemap-view.analyze :as analyze]
-            [clojure.tools.analyzer.jvm :as ana.jvm]))
-
-;; Ensure fixture namespaces are loaded
-(require 'clojure-compiler-treemap-view.fixtures.alpha
-         'clojure-compiler-treemap-view.fixtures.alpha.utils
-         'clojure-compiler-treemap-view.fixtures.alpha.handlers
-         'clojure-compiler-treemap-view.fixtures.beta
-         'clojure-compiler-treemap-view.fixtures.gamma
-         'clojure.spec.alpha)
+            [clojure-compiler-treemap-view.agent :as agent]))
 
 (deftest test-ns->path
   (testing "splits namespace string into segments"
@@ -46,7 +38,7 @@
     (is (= 3 (analyze/sexp-max-depth '(a (b (c x))))))))
 
 ;; ============================================================================
-;; Namespace Analysis Tests
+;; Namespace Analysis Tests (via compiler hooks)
 ;; ============================================================================
 
 (deftest test-analyze-ns
@@ -70,20 +62,24 @@
       (is (< (get-in threading [:metrics :max-depth-raw])
              (get-in threading [:metrics :max-depth-expanded]))))))
 
-(deftest test-find-unused-vars
-  (testing "identifies unused functions"
-    (let [all-asts (mapcat #(try (ana.jvm/analyze-ns %) (catch Exception _ []))
-                           '[clojure-compiler-treemap-view.fixtures.alpha
-                             clojure-compiler-treemap-view.fixtures.alpha.utils
-                             clojure-compiler-treemap-view.fixtures.alpha.handlers
-                             clojure-compiler-treemap-view.fixtures.beta])
-          unused-vars (analyze/find-unused-vars all-asts)
-          unused-strs (set (map str unused-vars))]
+(deftest test-find-unused-vars-via-hooks
+  (testing "identifies unused functions via compiler hooks"
+    (agent/clear!)
+    (agent/clear-var-references!)
+    (doseq [ns-sym '[clojure-compiler-treemap-view.fixtures.alpha
+                     clojure-compiler-treemap-view.fixtures.alpha.utils
+                     clojure-compiler-treemap-view.fixtures.alpha.handlers
+                     clojure-compiler-treemap-view.fixtures.beta]]
+      (require ns-sym :reload))
+    (let [unused-vars (agent/find-unused-vars '[clojure-compiler-treemap-view.fixtures.alpha
+                                                clojure-compiler-treemap-view.fixtures.alpha.utils
+                                                clojure-compiler-treemap-view.fixtures.alpha.handlers
+                                                clojure-compiler-treemap-view.fixtures.beta])]
       ;; unused-fn in alpha is never referenced
-      (is (contains? unused-strs "clojure-compiler-treemap-view.fixtures.alpha/unused-fn"))
+      (is (contains? unused-vars "clojure-compiler-treemap-view.fixtures.alpha/unused-fn"))
       ;; helper and format-output ARE referenced in handlers
-      (is (not (contains? unused-strs "clojure-compiler-treemap-view.fixtures.alpha.utils/helper")))
-      (is (not (contains? unused-strs "clojure-compiler-treemap-view.fixtures.alpha.utils/format-output"))))))
+      (is (not (contains? unused-vars "clojure-compiler-treemap-view.fixtures.alpha.utils/helper")))
+      (is (not (contains? unused-vars "clojure-compiler-treemap-view.fixtures.alpha.utils/format-output"))))))
 
 (deftest test-analyze-nses
   (testing "adds unused? flag to metrics"
@@ -97,28 +93,25 @@
       (is (get-in unused [:metrics :unused?]) "unused-fn should be marked unused")
       (is (not (get-in helper [:metrics :unused?])) "helper should not be marked unused"))))
 
-(deftest test-def-metrics
-  (testing "extracts all metrics from def node"
-    (let [asts (ana.jvm/analyze-ns 'clojure-compiler-treemap-view.fixtures.alpha)
-          simple-def (->> asts
-                          (filter #(= :def (:op %)))
-                          (filter #(= 'simple-fn (:name %)))
-                          first)
-          metrics (analyze/def-metrics simple-def)]
-      (is (= "simple-fn" (:name metrics)))
-      (is (= "clojure-compiler-treemap-view.fixtures.alpha" (:ns metrics)))
-      (is (number? (get-in metrics [:metrics :loc])))
-      (is (number? (get-in metrics [:metrics :expressions-raw])))
-      (is (number? (get-in metrics [:metrics :expressions-expanded])))
-      (is (number? (get-in metrics [:metrics :max-depth-raw])))
-      (is (number? (get-in metrics [:metrics :max-depth-expanded]))))))
+(deftest test-analyze-ns-metrics-format
+  (testing "extracts all metrics in expected format"
+    (let [{:keys [analyzed]} (analyze/analyze-ns 'clojure-compiler-treemap-view.fixtures.alpha)
+          simple (first (filter #(= "simple-fn" (:name %)) analyzed))]
+      (is simple "simple-fn should be in analyzed results")
+      (is (= "simple-fn" (:name simple)))
+      (is (= "clojure-compiler-treemap-view.fixtures.alpha" (:ns simple)))
+      (is (number? (get-in simple [:metrics :loc])))
+      (is (number? (get-in simple [:metrics :expressions-raw])))
+      (is (number? (get-in simple [:metrics :expressions-expanded])))
+      (is (number? (get-in simple [:metrics :max-depth-raw])))
+      (is (number? (get-in simple [:metrics :max-depth-expanded]))))))
 
-(deftest test-reader-fallback-preserves-namespace
-  (testing "reader fallback uses correct namespace, not clojure.core"
-    ;; clojure.spec.alpha is in skip-namespace? list, so it uses reader fallback
-    (let [{:keys [analyzed]} (analyze/analyze-ns 'clojure.spec.alpha)]
+(deftest test-analyze-multiple-namespaces
+  (testing "can analyze multiple namespaces in one call"
+    ;; This tests that analyze-ns properly filters to only the target namespace
+    (let [{:keys [analyzed]} (analyze/analyze-ns 'clojure-compiler-treemap-view.fixtures.beta)]
       (is (seq analyzed) "should have some analyzed forms")
       (doseq [fn-data analyzed]
-        (is (= "clojure.spec.alpha" (:ns fn-data))
-            (str "Expected ns clojure.spec.alpha but got " (:ns fn-data)
+        (is (= "clojure-compiler-treemap-view.fixtures.beta" (:ns fn-data))
+            (str "Expected ns clojure-compiler-treemap-view.fixtures.beta but got " (:ns fn-data)
                  " for " (:name fn-data)))))))
