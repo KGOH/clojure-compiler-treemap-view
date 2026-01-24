@@ -19,20 +19,54 @@
 ;; Error Tracking
 ;; ============================================================================
 
-(defonce errors
-  ;; Atom containing analysis errors for debugging.
-  ;; Each entry: {:ns namespace :phase :analyze|:unused-detection :error exception :timestamp ms}
-  (atom []))
-
-(defn clear-errors! []
-  (reset! errors []))
+(def ^:private ^:dynamic *errors*
+  "Dynamic var for collecting errors during analysis.
+   Bound to a fresh atom at the start of each analysis operation."
+  nil)
 
 (defn- record-error! [ns-sym phase exception]
-  (swap! errors conj {:ns ns-sym
-                      :phase phase
-                      :error exception
-                      :message (.getMessage exception)
-                      :timestamp (System/currentTimeMillis)}))
+  (when *errors*
+    (swap! *errors* conj {:ns ns-sym
+                          :phase phase
+                          :error exception
+                          :message (.getMessage exception)
+                          :timestamp (System/currentTimeMillis)})))
+
+(defn- with-error-tracking*
+  "Execute f with error tracking, returning {:result ... :errors [...]}."
+  [f]
+  (binding [*errors* (atom [])]
+    (let [result (f)]
+      {:result result
+       :errors @*errors*})))
+
+(defmacro ^:private with-error-tracking
+  "Execute body with error tracking, returning {:result ... :errors [...]}."
+  [& body]
+  `(with-error-tracking* (fn [] ~@body)))
+
+;; ============================================================================
+;; Capture Coordination
+;; ============================================================================
+
+(defmacro with-capture
+  "Clear capture buffers, execute body, then drain captured defs.
+   Options (as leading keyword-value pairs before body):
+     :include-var-refs? - Also clear var reference tracking (default: false)
+   Binds `captured` to the result of get-captured-defs in body's scope."
+  {:arglists '([& body] [:include-var-refs? bool & body])}
+  [& args]
+  (let [[opts body] (if (keyword? (first args))
+                      [(apply hash-map (take 2 args)) (drop 2 args)]
+                      [{} args])
+        include-var-refs? (:include-var-refs? opts)]
+    `(do
+       (agent/clear!)
+       ~(when include-var-refs?
+          `(agent/clear-var-references!))
+       ~@(butlast body)
+       (let [~'captured (agent/get-captured-defs)]
+         ~(last body)))))
 
 ;; ============================================================================
 ;; S-Expression Counters
@@ -122,7 +156,7 @@
      :ns-syms - Optional collection of namespace symbols to filter by.
                 If nil, processes all captured defs.
 
-   Returns vector of fn-data maps (same format as analyze-nses)."
+   Returns {:result [...] :errors [...]}."
   [& {:keys [ns-syms]}]
   (let [captured (agent/peek-captured-defs)
         ns-strs (when ns-syms (set (map str ns-syms)))
@@ -130,7 +164,8 @@
         nses-to-check (or ns-syms
                           (->> fn-data (map :ns) distinct (map symbol)))
         unused-vars (agent/find-unused-vars nses-to-check)]
-    (add-unused-flags fn-data unused-vars)))
+    {:result (add-unused-flags fn-data unused-vars)
+     :errors []}))
 
 ;; ============================================================================
 ;; Namespace Analysis via Hooks (with reload)
@@ -142,26 +177,25 @@
    Clears the capture buffer, reloads the namespace (triggering compilation),
    then processes the captured def forms into metrics.
 
-   Returns {:analyzed [...] :asts []}
-   Note: :asts is always empty (maintained for API compatibility).
+   Returns {:result [...] :errors [...]} where:
+     :result - vector of fn-data maps
+     :errors - vector of error maps from this analysis run
 
-   Each analyzed entry contains:
+   Each result entry contains:
      :name    - Var name (string)
      :ns      - Namespace (string)
      :file    - Source file (nil - hooks don't capture this)
      :line    - Line number
      :metrics - Map of metrics"
   [ns-sym]
-  (try
-    (agent/clear!)
-    (require ns-sym :reload)
-    (let [captured (agent/get-captured-defs)
-          ns-strs #{(str ns-sym)}]
-      {:analyzed (process-captured-defs captured ns-strs)
-       :asts []})
-    (catch Throwable e
-      (record-error! ns-sym :analyze e)
-      {:analyzed [] :asts []})))
+  (with-error-tracking
+    (try
+      (with-capture
+        (require ns-sym :reload)
+        (process-captured-defs captured #{(str ns-sym)}))
+      (catch Throwable e
+        (record-error! ns-sym :analyze e)
+        []))))
 
 (defn analyze-nses
   "Analyze multiple namespaces using compiler hooks.
@@ -169,20 +203,21 @@
    This clears both capture buffers, loads all namespaces (in order),
    then processes captured defs and marks unused vars.
 
-   Returns seq of function data maps, each with :unused? in metrics."
+   Returns {:result [...] :errors [...]} where:
+     :result - seq of function data maps, each with :unused? in metrics
+     :errors - vector of error maps from this analysis run"
   [ns-syms]
-  (agent/clear!)
-  (agent/clear-var-references!)
-  (doseq [ns-sym ns-syms]
-    (try
-      (require ns-sym :reload)
-      (catch Throwable e
-        (record-error! ns-sym :reload e))))
-  (let [captured (agent/get-captured-defs)
-        ns-strs (set (map str ns-syms))
-        fn-data (process-captured-defs captured ns-strs)
-        unused-vars (agent/find-unused-vars ns-syms)]
-    (add-unused-flags fn-data unused-vars)))
+  (with-error-tracking
+    (with-capture :include-var-refs? true
+      (doseq [ns-sym ns-syms]
+        (try
+          (require ns-sym :reload)
+          (catch Throwable e
+            (record-error! ns-sym :reload e))))
+      (let [ns-strs (set (map str ns-syms))
+            fn-data (process-captured-defs captured ns-strs)
+            unused-vars (agent/find-unused-vars ns-syms)]
+        (add-unused-flags fn-data unused-vars)))))
 
 ;; ============================================================================
 ;; Hierarchy Building
@@ -194,50 +229,31 @@
   [ns-str]
   (str/split ns-str #"\."))
 
-(defn- ensure-path
-  "Ensure path exists in tree, creating intermediate nodes as needed."
-  [tree path]
-  (if (empty? path)
-    tree
-    (let [[segment & rest-path] path
-          children (:children tree [])
-          existing-idx (first (keep-indexed
-                                (fn [i child]
-                                  (when (= (:name child) segment) i))
-                                children))]
-      (if existing-idx
-        (update-in tree [:children existing-idx] ensure-path rest-path)
-        (let [new-child (ensure-path {:name segment :children []} rest-path)]
-          (update tree :children (fnil conj []) new-child))))))
-
-(defn- add-leaf
-  "Add a leaf node (function) at the given path."
-  [tree path metrics ns-str]
+(defn- add-to-map-tree
+  "Add a leaf to a nested map structure. O(1) per level."
+  [tree path ns-str metrics]
   (if (= 1 (count path))
-    ;; Add leaf with full namespace
-    (update tree :children (fnil conj [])
-            {:name (first path) :ns ns-str :metrics metrics})
-    ;; Navigate deeper
-    (let [[segment & rest-path] path
-          children (:children tree [])
-          idx (first (keep-indexed
-                       (fn [i child]
-                         (when (= (:name child) segment) i))
-                       children))]
-      (if idx
-        (update-in tree [:children idx] add-leaf rest-path metrics ns-str)
-        ;; Create path if not exists
-        (let [new-tree (ensure-path tree [segment])]
-          (add-leaf new-tree path metrics ns-str))))))
+    (assoc tree (first path) {:leaf? true :ns ns-str :metrics metrics})
+    (update tree (first path) (fnil add-to-map-tree {}) (rest path) ns-str metrics)))
+
+(defn- map-tree->d3-tree
+  "Convert nested map structure to D3-compatible tree with :name and :children."
+  [name node]
+  (if (:leaf? node)
+    {:name name :ns (:ns node) :metrics (:metrics node)}
+    {:name name
+     :children (mapv (fn [[k v]] (map-tree->d3-tree k v)) node)}))
 
 (defn build-hierarchy
   "Build D3-compatible hierarchy from flat function data.
+   Complexity: O(n*d) where n = functions, d = average namespace depth.
    Input: seq of {:name \"fn\" :ns \"foo.bar\" :metrics {...}}
    Output: {:name \"root\" :children [{:name \"foo\" :children [...]}]}"
   [fn-data]
-  (reduce
-    (fn [tree {:keys [ns name metrics]}]
-      (let [path (conj (vec (ns->path ns)) name)]
-        (add-leaf tree path metrics ns)))
-    {:name "root" :children []}
-    fn-data))
+  (let [map-tree (reduce
+                   (fn [tree {:keys [ns name metrics]}]
+                     (let [path (conj (vec (ns->path ns)) name)]
+                       (add-to-map-tree tree path ns metrics)))
+                   {}
+                   fn-data)]
+    (map-tree->d3-tree "root" map-tree)))

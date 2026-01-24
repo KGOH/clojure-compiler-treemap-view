@@ -51,6 +51,8 @@
   "Analyze namespaces and open treemap visualization.
    Convenience function combining analyze -> build-hierarchy -> render-html -> open.
 
+   Returns {:file \"path\" :errors [...]}.
+
    Options:
      :size  - Metric for cell size (default: :expressions-raw)
      :color - Metric for cell color (default: :max-depth-raw)
@@ -60,23 +62,25 @@
   [ns-syms & {:keys [size color]
               :or {size :expressions-raw
                    color :max-depth-raw}}]
-  (-> ns-syms
-      analyze/analyze-nses
-      analyze/build-hierarchy
-      (render-html :size size :color color)
-      open-html))
+  (let [{:keys [result errors]} (analyze/analyze-nses ns-syms)
+        file-path (-> result
+                      analyze/build-hierarchy
+                      (render-html :size size :color color)
+                      open-html)]
+    {:file file-path
+     :errors errors}))
 
 
 (comment
-  (def analyzed (analyze/analyze-captured))
+  (def {:keys [result errors]} (analyze/analyze-captured))
 
-  #_(def analyzed (analyze/analyze-nses (->> (all-ns) (map ns-name))))
+  #_(def {:keys [result errors]} (analyze/analyze-nses (->> (all-ns) (map ns-name))))
 
-  analyze/errors
-  (->> @analyze/errors (map :ns) distinct)
-  #_(analyze/clear-errors!)
+  ;; Check errors from last analysis
+  errors
+  (->> errors (map :ns) distinct)
 
-  (def tree (analyze/build-hierarchy analyzed))
+  (def tree (analyze/build-hierarchy result))
 
   (open-html (render-html tree))
 
