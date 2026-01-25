@@ -31,22 +31,7 @@ public class ClassLoaderTransformer implements ClassFileTransformer {
      * Class names use internal format with '/' separators.
      */
     private boolean shouldCapture(String className) {
-        // JDK core classes
-        if (className.startsWith("java/")) return false;
-        if (className.startsWith("javax/")) return false;
-        if (className.startsWith("sun/")) return false;
-        if (className.startsWith("jdk/")) return false;
-        if (className.startsWith("com/sun/")) return false;
-
-        // JVM internals
-        if (className.startsWith("jdk/internal/")) return false;
-
-        // ByteBuddy internals (from our compiler hook)
-        if (className.contains("bytebuddy")) return false;
-
-        // Our own agent classes
-        if (className.startsWith("clojure/metrics/")) return false;
-
+        // Capture everything - filtering is done in the UI
         return true;
     }
 

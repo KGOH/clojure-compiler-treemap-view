@@ -94,11 +94,27 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
         <input type="checkbox" id="show-labels">
         <label for="show-labels">Show names</label>
       </div>
+      <div class="control-group filter-classloader" style="display: none;">
+        <input type="checkbox" id="hide-jdk" checked>
+        <label for="hide-jdk">Hide JDK</label>
+      </div>
+      <div class="control-group filter-classloader" style="display: none;">
+        <input type="checkbox" id="hide-clojure" checked>
+        <label for="hide-clojure">Hide Clojure</label>
+      </div>
+      <div class="control-group filter-classloader" style="display: none;">
+        <input type="checkbox" id="hide-agent" checked>
+        <label for="hide-agent">Hide agent</label>
+      </div>
+      <div class="control-group filter-compiler" style="display: none;">
+        <input type="checkbox" id="hide-cctv" checked>
+        <label for="hide-cctv">Hide CCTV</label>
+      </div>
       <div class="search-container">
         <input type="text" id="search-input" placeholder="Search ns/symbol...">
         <div class="suggestions" id="suggestions"></div>
       </div>
-      <button id="upload-btn" class="upload-btn" title="Load JSON file">Load</button>
+      <button id="upload-btn" class="upload-btn" title="Load metrics file">Load</button>
     </div>
   </div>
   <div class="info-panel" id="info-panel"></div>
@@ -108,11 +124,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   <div id="upload-overlay" class="upload-overlay">
     <div id="upload-zone" class="upload-zone">
       <div class="upload-icon">📁</div>
-      <div class="upload-text">Drop JSON file here or click to select</div>
-      <div class="upload-hint">Export from REPL: (export-metrics '[ns1 ns2] "metrics.json")</div>
+      <div class="upload-text">Drop metrics file here or click to select</div>
+      <div class="upload-hint">Export from REPL: (cctv/write-metrics (:result analysis) "metrics.prom")</div>
     </div>
   </div>
-  <input type="file" id="file-input" accept=".json" style="display: none;">
+  <input type="file" id="file-input" accept=".json,.prom" style="display: none;">
   <script>window.TREEMAP_DATA = null;</script>
   <script>// =============================================================================
 // Hierarchy Building (from flat data)
@@ -224,24 +240,110 @@ const sourceConfigs = {
 // Embedded data (injected by render-html, or null for standalone viewer)
 const TREEMAP_DATA = window.TREEMAP_DATA || null;
 
+// Store original data for re-filtering
+let originalFlatData = null;
+
+// Clojure standard library prefixes (shipped with Clojure, not third-party)
+const CLOJURE_STDLIB_PREFIXES = [
+  'clojure.asm',
+  'clojure.core',
+  'clojure.edn',
+  'clojure.instant',
+  'clojure.java',
+  'clojure.lang',
+  'clojure.main',
+  'clojure.pprint',
+  'clojure.repl',
+  'clojure.set',
+  'clojure.spec',
+  'clojure.string',
+  'clojure.template',
+  'clojure.test',
+  'clojure.uuid',
+  'clojure.walk',
+  'clojure.xml',
+  'clojure.zip'
+];
+
+// Classloader filter predicates
+function isJdkClass(fullName) {
+  if (!fullName) return false;
+  return fullName.startsWith('java.') ||
+         fullName.startsWith('javax.') ||
+         fullName.startsWith('sun.') ||
+         fullName.startsWith('jdk.') ||
+         fullName.startsWith('com.sun.');
+}
+
+function isClojureStdlib(fullName) {
+  if (!fullName) return false;
+  return CLOJURE_STDLIB_PREFIXES.some(prefix =>
+    fullName.startsWith(prefix + '.') || fullName.startsWith(prefix + '$') || fullName === prefix
+  );
+}
+
+function isAgentClass(fullName) {
+  if (!fullName) return false;
+  return fullName.startsWith('clojure.metrics.');
+}
+
+// Compiler filter predicates
+function isCctvNamespace(ns) {
+  if (!ns) return false;
+  return ns.startsWith('clojure-compiler-treemap-view');
+}
+
+// Apply filters to classloader data
+function filterClassloaderData(data) {
+  if (!data) return data;
+  const hideJdk = document.getElementById('hide-jdk')?.checked ?? true;
+  const hideClojure = document.getElementById('hide-clojure')?.checked ?? true;
+  const hideAgent = document.getElementById('hide-agent')?.checked ?? true;
+
+  return data.filter(item => {
+    const fullName = item['full-name'] || item.ns || '';
+    if (hideJdk && isJdkClass(fullName)) return false;
+    if (hideClojure && isClojureStdlib(fullName)) return false;
+    if (hideAgent && isAgentClass(fullName)) return false;
+    return true;
+  });
+}
+
+// Apply filters to compiler data
+function filterCompilerData(data) {
+  if (!data) return data;
+  const hideCctv = document.getElementById('hide-cctv')?.checked ?? true;
+
+  return data.filter(item => {
+    if (hideCctv && isCctvNamespace(item.ns)) return false;
+    return true;
+  });
+}
+
 // Build sources array from flat data
 function buildSources(flatData) {
   const sources = [];
 
   if (flatData.compiler && flatData.compiler.length > 0) {
     const config = sourceConfigs.compiler;
-    sources.push({
-      ...config,
-      tree: buildHierarchy(flatData.compiler, 'compiler')
-    });
+    const filteredData = filterCompilerData(flatData.compiler);
+    if (filteredData.length > 0) {
+      sources.push({
+        ...config,
+        tree: buildHierarchy(filteredData, 'compiler')
+      });
+    }
   }
 
   if (flatData.classloader && flatData.classloader.length > 0) {
     const config = sourceConfigs.classloader;
-    sources.push({
-      ...config,
-      tree: buildHierarchy(flatData.classloader, 'classloader')
-    });
+    const filteredData = filterClassloaderData(flatData.classloader);
+    if (filteredData.length > 0) {
+      sources.push({
+        ...config,
+        tree: buildHierarchy(filteredData, 'classloader')
+      });
+    }
   }
 
   return sources;
@@ -473,6 +575,19 @@ function clearSearchHighlights() {
   treemapEl.querySelectorAll('.search-overlay').forEach(el => el.remove());
 }
 
+// Update filter checkbox visibility based on current source
+function updateFilterVisibility() {
+  const isClassloader = currentSource?.id === 'classloader';
+  const isCompiler = currentSource?.id === 'compiler';
+
+  document.querySelectorAll('.filter-classloader').forEach(el => {
+    el.style.display = isClassloader ? '' : 'none';
+  });
+  document.querySelectorAll('.filter-compiler').forEach(el => {
+    el.style.display = isCompiler ? '' : 'none';
+  });
+}
+
 // Initialize source selector
 function initSourceSelector() {
   // Clear existing options
@@ -494,6 +609,7 @@ function initSourceSelector() {
     sourceSelect.removeEventListener('change', switchSource);
     sourceSelect.addEventListener('change', switchSource);
   }
+  updateFilterVisibility();
 }
 
 // Switch to a different data source
@@ -512,6 +628,9 @@ function switchSource() {
   // Reset navigation state
   currentNode = data;
   pathStack = [];
+
+  // Update filter visibility for new source
+  updateFilterVisibility();
 
   // Rebuild dropdowns with new metrics
   rebuildMetricDropdowns();
@@ -1035,6 +1154,7 @@ function initUpload() {
 // =============================================================================
 
 function initializeWithData(flatData) {
+  originalFlatData = flatData;
   sources = buildSources(flatData);
   currentSource = sources[0] || null;
   data = currentSource ? currentSource.tree : null;
@@ -1047,8 +1167,46 @@ function initializeWithData(flatData) {
     initSourceSelector();
     initDropdowns();
     initSearch();
+    initFilterCheckboxes();
     render();
   }
+}
+
+function rebuildWithFilters() {
+  if (!originalFlatData) return;
+  const currentSourceName = currentSource?.name;
+  sources = buildSources(originalFlatData);
+
+  // Try to stay on the same source
+  currentSource = sources.find(s => s.name === currentSourceName) || sources[0] || null;
+  data = currentSource ? currentSource.tree : null;
+  metricsOptions = currentSource ? currentSource.metrics : [];
+
+  if (data) {
+    currentNode = data;
+    pathStack = [];
+    buildChildMaps(data);
+    initSourceSelector();
+    initDropdowns();
+    initSearch();
+    render();
+  }
+}
+
+function initFilterCheckboxes() {
+  const filterCheckboxes = [
+    'hide-jdk',
+    'hide-clojure',
+    'hide-agent',
+    'hide-cctv'
+  ];
+
+  filterCheckboxes.forEach(id => {
+    const checkbox = document.getElementById(id);
+    if (checkbox) {
+      checkbox.addEventListener('change', rebuildWithFilters);
+    }
+  });
 }
 
 async function loadDataFromUrl(url) {

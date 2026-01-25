@@ -11,7 +11,7 @@ clj -M:agent
 
 ```clojure
 (require '[clojure-compiler-treemap-view.core :as cctv])
-(def analysis (cctv/analyze-nses '[my.namespace]))
+(def analysis (cctv/analyze-captured))
 (cctv/write-metrics (:result analysis) "metrics.prom")
 ;; Open viewer.html?data=file:///path/to/metrics.prom in browser
 ```
