@@ -4,13 +4,34 @@
             [jsonista.core :as json]))
 
 (def analyze-nses
-  "Analyze namespaces by reloading them with the agent active.
-   Returns {:result {:compiler [...] :classloader [...]} :errors [...]}."
+  "Analyze multiple namespaces using compiler hooks.
+
+   This clears all capture buffers (defs, var refs, classes), loads all
+   namespaces (in order), then processes captured data.
+
+   Returns {:result {:compiler [...] :classloader [...]} :errors [...]} where:
+     :compiler   - seq of function data maps, each with :unused? in metrics
+     :classloader - seq of class data maps with :bytecode-size metric
+     :errors     - vector of error maps from this analysis run
+
+   WARNING: Not thread-safe. Do not call concurrently from multiple threads."
   cctv.analyze/analyze-nses)
 
 (def analyze-captured
-  "Analyze already-captured forms from the agent buffer.
-   Returns {:result {:compiler [...] :classloader [...]} :errors [...]}."
+  "Analyze already-captured def forms without reloading namespaces.
+
+   Drains the capture buffer (subsequent calls return empty until more forms
+   compile). Store the result if you need it later.
+
+   Useful when forms were captured during normal REPL usage.
+
+   Options:
+     :ns-syms - Optional collection of namespace symbols to filter by.
+                If nil, processes all captured defs.
+
+   Returns {:result {:compiler [...] :classloader [...]} :errors [...]}.
+
+   WARNING: Not thread-safe. Do not call concurrently from multiple threads."
   cctv.analyze/analyze-captured)
 
 (defn write-metrics
