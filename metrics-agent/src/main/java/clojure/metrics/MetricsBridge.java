@@ -1,16 +1,18 @@
 package clojure.metrics;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.Collection;
 import java.util.Map;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Bridge between the Java agent and Clojure code.
  *
- * Captured def information is buffered in a thread-safe queue
- * and can be drained by Clojure code via the static API.
+ * Captured def information is stored in a thread-safe map keyed by
+ * (ns, name, phase). This ensures:
+ * - Bounded memory (O(unique defs))
+ * - Latest version wins when same def is recompiled
+ * - No duplicates accumulate
  *
  * Usage from Clojure:
  *   (import '[clojure.metrics MetricsBridge])
@@ -21,10 +23,11 @@ public class MetricsBridge {
 
     /**
      * Thread-safe buffer for captured def information.
-     * Each entry is a Map with keys: phase, op, name, ns, line, end-line, form
+     * Key: "ns/name/phase" composite key
+     * Value: Map with keys: phase, op, name, ns, line, end-line, form
      */
-    private static final ConcurrentLinkedQueue<Map<String, Object>> BUFFER =
-        new ConcurrentLinkedQueue<>();
+    private static final ConcurrentHashMap<String, Map<String, Object>> BUFFER =
+        new ConcurrentHashMap<>();
 
     /**
      * Flag to enable/disable capturing (useful for filtering).
@@ -33,12 +36,39 @@ public class MetricsBridge {
 
     /**
      * Capture a def form. Called by MacroexpandUnifiedAdvice.
+     * Uses composite key (ns/name/phase) so latest version overwrites previous.
      *
      * @param defInfo Map containing def metadata
      */
     public static void capture(Map<String, Object> defInfo) {
-        if (enabled && defInfo != null) {
-            BUFFER.offer(defInfo);
+        if (!enabled || defInfo == null) return;
+
+        String ns = (String) defInfo.get("ns");
+        String phase = (String) defInfo.get("phase");
+        String name = extractDefName(defInfo.get("form"));
+
+        if (ns == null || name == null || phase == null) return;
+
+        String key = ns + "/" + name + "/" + phase;
+        BUFFER.put(key, defInfo);
+    }
+
+    /**
+     * Extract def name from form like (def name ...) or (defn name ...)
+     * Uses reflection to call Clojure seq methods.
+     *
+     * @param form The Clojure form (typically an ISeq)
+     * @return The def name as a string, or null if extraction fails
+     */
+    private static String extractDefName(Object form) {
+        try {
+            // form.next().first() gets the second element (the name symbol)
+            Object rest = form.getClass().getMethod("next").invoke(form);
+            if (rest == null) return null;
+            Object second = rest.getClass().getMethod("first").invoke(rest);
+            return second != null ? second.toString() : null;
+        } catch (Exception e) {
+            return null;
         }
     }
 
@@ -46,14 +76,11 @@ public class MetricsBridge {
      * Drain and return all captured defs, clearing the buffer.
      * This is the primary API for Clojure code.
      *
-     * @return List of captured def maps
+     * @return Collection of captured def maps
      */
-    public static List<Map<String, Object>> drainBuffer() {
-        List<Map<String, Object>> result = new ArrayList<>();
-        Map<String, Object> item;
-        while ((item = BUFFER.poll()) != null) {
-            result.add(item);
-        }
+    public static Collection<Map<String, Object>> drainBuffer() {
+        Collection<Map<String, Object>> result = new ArrayList<>(BUFFER.values());
+        BUFFER.clear();
         return result;
     }
 
@@ -61,10 +88,10 @@ public class MetricsBridge {
      * Peek at captured defs without clearing the buffer.
      * Useful for debugging or inspection.
      *
-     * @return Unmodifiable list of captured def maps
+     * @return Collection of captured def maps
      */
-    public static List<Map<String, Object>> peekBuffer() {
-        return Collections.unmodifiableList(new ArrayList<>(BUFFER));
+    public static Collection<Map<String, Object>> peekBuffer() {
+        return new ArrayList<>(BUFFER.values());
     }
 
     /**
@@ -79,7 +106,7 @@ public class MetricsBridge {
      *
      * @return Number of captured defs in buffer
      */
-    public static int bufferSize() {
+    public static int size() {
         return BUFFER.size();
     }
 
