@@ -3,20 +3,6 @@
   (:require [clojure-compiler-treemap-view.analyze :as cctv.analyze]
             [jsonista.core :as json]))
 
-(def analyze-nses
-  "Analyze multiple namespaces using compiler hooks.
-
-   This clears all capture buffers (defs, var refs, classes), loads all
-   namespaces (in order), then processes captured data.
-
-   Returns {:result {:compiler [...] :classloader [...]} :errors [...]} where:
-     :compiler   - seq of function data maps, each with :unused? in metrics
-     :classloader - seq of class data maps with :bytecode-size metric
-     :errors     - vector of error maps from this analysis run
-
-   WARNING: Not thread-safe. Do not call concurrently from multiple threads."
-  cctv.analyze/analyze-nses)
-
 (def analyze-captured
   "Analyze already-captured def forms without reloading namespaces.
 
@@ -33,6 +19,20 @@
 
    WARNING: Not thread-safe. Do not call concurrently from multiple threads."
   cctv.analyze/analyze-captured)
+
+(def analyze-nses
+  "Analyze multiple namespaces using compiler hooks.
+
+   This clears all capture buffers (defs, var refs, classes), loads all
+   namespaces (in order), then processes captured data.
+
+   Returns {:result {:compiler [...] :classloader [...]} :errors [...]} where:
+     :compiler   - seq of function data maps, each with :unused? in metrics
+     :classloader - seq of class data maps with :bytecode-size metric
+     :errors     - vector of error maps from this analysis run
+
+   WARNING: Not thread-safe. Do not call concurrently from multiple threads."
+  cctv.analyze/analyze-nses)
 
 (defn write-metrics
   "Write metrics data to a JSON file.

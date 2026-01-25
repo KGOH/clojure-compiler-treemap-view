@@ -1,6 +1,6 @@
 {
   "version" : 1,
-  "generated" : "2026-01-25T15:31:24.773959Z",
+  "generated" : "2026-01-25T15:39:28.187010Z",
   "compiler" : [ {
     "name" : "java-collection-module",
     "ns" : "jsonista.core",
@@ -149,7 +149,7 @@
     "name" : "analyze-captured",
     "ns" : "clojure-compiler-treemap-view.core",
     "file" : null,
-    "line" : 11,
+    "line" : 6,
     "metrics" : {
       "expressions-raw" : 5,
       "expressions-expanded" : 5,
@@ -245,7 +245,7 @@
     "name" : "analyze-nses",
     "ns" : "clojure-compiler-treemap-view.core",
     "file" : null,
-    "line" : 6,
+    "line" : 23,
     "metrics" : {
       "expressions-raw" : 5,
       "expressions-expanded" : 5,
@@ -377,7 +377,7 @@
     "name" : "write-metrics",
     "ns" : "clojure-compiler-treemap-view.core",
     "file" : null,
-    "line" : 16,
+    "line" : 37,
     "metrics" : {
       "expressions-raw" : 45,
       "expressions-expanded" : 47,
