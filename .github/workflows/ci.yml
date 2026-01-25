@@ -7,31 +7,26 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: "pages"
-  cancel-in-progress: false
+  group: "ci-${{ github.ref }}"
+  cancel-in-progress: true
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
-
       - name: Setup Clojure
         uses: DeLaGuardo/setup-clojure@12.5
         with:
           cli: 'latest'
-
       - name: Cache Clojure dependencies
         uses: actions/cache@v4
         with:
@@ -42,34 +37,26 @@ jobs:
           key: ${{ runner.os }}-clojure-${{ hashFiles('**/deps.edn') }}
           restore-keys: |
             ${{ runner.os }}-clojure-
-
       - name: Build metrics agent
         run: mvn -f metrics-agent/pom.xml package -q
-
       - name: Run tests
         run: clojure -M:agent:test:runner
 
-  deploy:
+  update-metrics:
     needs: test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
-
       - name: Setup Clojure
         uses: DeLaGuardo/setup-clojure@12.5
         with:
           cli: 'latest'
-
       - name: Cache Clojure dependencies
         uses: actions/cache@v4
         with:
@@ -80,36 +67,38 @@ jobs:
           key: ${{ runner.os }}-clojure-${{ hashFiles('**/deps.edn') }}
           restore-keys: |
             ${{ runner.os }}-clojure-
-
       - name: Build metrics agent
         run: mvn -f metrics-agent/pom.xml package -q
-
-      - name: Deploy viewer and generate metrics
+      - name: Generate metrics
         run: |
-          mkdir -p _site
-          cp resources/viewer.html _site/viewer.html
-          echo '<!DOCTYPE html><meta http-equiv="refresh" content="0; url=viewer.html?data=metrics.json">' > _site/index.html
           clojure -M:agent -e "
           (require '[clojure-compiler-treemap-view.analyze :as cctv.analyze]
                    '[jsonista.core :as json])
-          ;; Generate metrics data (analyze-captured processes forms captured during require)
           (let [{:keys [result]} (cctv.analyze/analyze-captured)
                 output {:version 1
                         :generated (.toString (java.time.Instant/now))
                         :namespaces [\"clojure-compiler-treemap-view\"]
                         :compiler (:compiler result)
                         :classloader (:classloader result)}]
-            (spit \"_site/metrics.json\" (json/write-value-as-string output)))
+            (spit \"metrics.json.new\" (json/write-value-as-string output)))
           "
+      - name: Commit metrics if changed
+        run: |
+          # Compare ignoring timestamp
+          if [ -f metrics.json ]; then
+            OLD_DATA=$(jq -S 'del(.generated)' metrics.json)
+            NEW_DATA=$(jq -S 'del(.generated)' metrics.json.new)
+            if [ "$OLD_DATA" = "$NEW_DATA" ]; then
+              echo "Metrics unchanged, skipping commit"
+              rm metrics.json.new
+              exit 0
+            fi
+          fi
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
+          mv metrics.json.new metrics.json
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: '_site'
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add metrics.json
+          git commit -m "Update metrics.json [skip ci]"
+          git push

@@ -28,7 +28,7 @@
 
 (deftest test-viewer-html-exists
   (testing "pre-built viewer.html exists and is valid"
-    (let [content (slurp (io/resource "viewer.html"))]
+    (let [content (slurp (io/file "viewer.html"))]
       (is (str/includes? content "<!DOCTYPE html"))
       (is (str/includes? content "d3js.org"))  ; D3 is embedded inline
       (is (str/includes? content "treemap"))
