@@ -3,12 +3,6 @@
             [clojure-compiler-treemap-view.analyze :as cctv.analyze]
             [clojure-compiler-treemap-view.agent :as agent]))
 
-(deftest test-ns->path
-  (testing "splits namespace string into segments"
-    (is (= ["foo" "bar" "baz"] (cctv.analyze/ns->path "foo.bar.baz")))
-    (is (= ["single"] (cctv.analyze/ns->path "single")))
-    (is (= ["clojure-compiler-treemap-view" "fixtures" "alpha"] (cctv.analyze/ns->path "clojure-compiler-treemap-view.fixtures.alpha")))))
-
 ;; ============================================================================
 ;; S-Expression Counter Tests
 ;; ============================================================================
@@ -164,10 +158,6 @@
       (is (= [] (:compiler result)))
       (is (= 1 (count errors)))
       (is (= 'clojure-compiler-treemap-view.fixtures.broken (:ns (first errors)))))))
-
-(deftest test-build-hierarchy-empty
-  (testing "build-hierarchy handles empty input"
-    (is (= {:name "root" :children []} (cctv.analyze/build-hierarchy [])))))
 
 (deftest test-analyze-nses-with-broken
   (testing "analyze-nses continues when one namespace fails"

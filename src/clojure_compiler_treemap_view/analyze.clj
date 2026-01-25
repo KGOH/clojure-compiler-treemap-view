@@ -213,56 +213,10 @@
          :classloader class-data}))))
 
 ;; ============================================================================
-;; Hierarchy Building
-;; ============================================================================
-
-(defn ns->path
-  "Convert namespace string to path segments.
-   \"foo.bar.baz\" -> [\"foo\" \"bar\" \"baz\"]"
-  [ns-str]
-  (str/split ns-str #"\."))
-
-(defn- add-to-map-tree
-  "Add a node to a nested map structure. O(1) per level.
-   Nodes can have both :metrics and :children (e.g. a function with closures).
-   node-data is a map with :ns, :metrics, and optionally :full-name."
-  [tree path node-data]
-  (if (= 1 (count path))
-    ;; Add/merge node-data onto existing node (which may already have children)
-    (update tree (first path) merge node-data)
-    ;; Recurse into :children
-    (update-in tree [(first path) :children] (fnil add-to-map-tree {}) (rest path) node-data)))
-
-(defn- map-tree->d3-tree
-  "Convert nested map structure to D3-compatible tree with :name and :children.
-   Nodes can have both :metrics and :children."
-  [name node]
-  (cond-> {:name name}
-    (:ns node)        (assoc :ns (:ns node))
-    (:full-name node) (assoc :full-name (:full-name node))
-    (:metrics node)   (assoc :metrics (:metrics node))
-    (:children node)  (assoc :children (mapv (fn [[k v]] (map-tree->d3-tree k v))
-                                             (:children node)))))
-
-(defn build-hierarchy
-  "Build D3-compatible hierarchy from flat function data.
-   Complexity: O(n*d) where n = functions, d = average namespace depth.
-   Input: seq of {:name \"fn\" :ns \"foo.bar\" :metrics {...}}
-   Output: {:name \"root\" :children [{:name \"foo\" :children [...]}]}"
-  [fn-data]
-  (let [map-tree (reduce
-                   (fn [tree {:keys [ns name metrics]}]
-                     (let [path (conj (vec (ns->path ns)) name)]
-                       (add-to-map-tree tree path {:ns ns :metrics metrics})))
-                   {}
-                   fn-data)]
-    (map-tree->d3-tree "root" {:children map-tree})))
-
-;; ============================================================================
 ;; Class Loading Data
 ;; ============================================================================
 
-(defn class-name->path
+(defn- class-name->path
   "Convert Clojure class name to path segments for hierarchy.
    Splits on both '.' (namespace/package) and '$' (inner class/fn).
    \"foo.bar.baz$quux$fn__123\" -> [\"foo\" \"bar\" \"baz\" \"quux\" \"fn__123\"]"
@@ -289,18 +243,3 @@
        :file nil
        :line nil
        :metrics {:bytecode-size bytecode-size}})))
-
-(defn build-class-hierarchy
-  "Build D3-compatible hierarchy from class data.
-   Reuses add-to-map-tree and map-tree->d3-tree from build-hierarchy.
-
-   Input: seq of {:name \"fn__123\" :full-name \"foo.bar$baz$fn__123\" :metrics {:bytecode-size 1234}}
-   Output: {:name \"root\" :children [{:name \"foo\" :children [...]}]}"
-  [class-data]
-  (let [map-tree (reduce
-                   (fn [tree {:keys [name full-name metrics]}]
-                     (let [path (class-name->path full-name)]
-                       (add-to-map-tree tree path {:full-name full-name :metrics metrics})))
-                   {}
-                   class-data)]
-    (map-tree->d3-tree "root" {:children map-tree})))
