@@ -9929,10 +9929,6 @@ clojure_bytecode_size{name="range",full_name="clojure.core$range"} 2626
 clojure_field_count{name="range",full_name="clojure.core$range"} 2
 clojure_instruction_count{name="range",full_name="clojure.core$range"} 163
 clojure_unreferenced{name="range",full_name="clojure.core$range"} 0
-clojure_bytecode_size{name="MemorySessionImpl",full_name="jdk.internal.foreign.MemorySessionImpl"} 8296
-clojure_field_count{name="MemorySessionImpl",full_name="jdk.internal.foreign.MemorySessionImpl"} 11
-clojure_instruction_count{name="MemorySessionImpl",full_name="jdk.internal.foreign.MemorySessionImpl"} 232
-clojure_unreferenced{name="MemorySessionImpl",full_name="jdk.internal.foreign.MemorySessionImpl"} 0
 clojure_bytecode_size{name="4",full_name="clojure.metrics.shaded.bytebuddy.matcher.MethodSortMatcher$Sort$4"} 1167
 clojure_field_count{name="4",full_name="clojure.metrics.shaded.bytebuddy.matcher.MethodSortMatcher$Sort$4"} 0
 clojure_instruction_count{name="4",full_name="clojure.metrics.shaded.bytebuddy.matcher.MethodSortMatcher$Sort$4"} 10
@@ -12613,10 +12609,6 @@ clojure_bytecode_size{name="op_unform",full_name="clojure.spec.alpha$op_unform"}
 clojure_field_count{name="op_unform",full_name="clojure.spec.alpha$op_unform"} 27
 clojure_instruction_count{name="op_unform",full_name="clojure.spec.alpha$op_unform"} 494
 clojure_unreferenced{name="op_unform",full_name="clojure.spec.alpha$op_unform"} 0
-clojure_bytecode_size{name="Scope",full_name="java.lang.foreign.MemorySegment$Scope"} 649
-clojure_field_count{name="Scope",full_name="java.lang.foreign.MemorySegment$Scope"} 0
-clojure_instruction_count{name="Scope",full_name="java.lang.foreign.MemorySegment$Scope"} 0
-clojure_unreferenced{name="Scope",full_name="java.lang.foreign.MemorySegment$Scope"} 0
 clojure_bytecode_size{name="gen_for_name",full_name="clojure.spec.gen.alpha$gen_for_name"} 1543
 clojure_field_count{name="gen_for_name",full_name="clojure.spec.gen.alpha$gen_for_name"} 3
 clojure_instruction_count{name="gen_for_name",full_name="clojure.spec.gen.alpha$gen_for_name"} 60
