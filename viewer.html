@@ -95,16 +95,16 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
         <label for="show-labels">Show names</label>
       </div>
       <div class="control-group filter-classloader" style="display: none;">
-        <input type="checkbox" id="hide-jdk" checked>
-        <label for="hide-jdk">Hide JDK</label>
+        <input type="checkbox" id="show-jdk">
+        <label for="show-jdk">Show JDK</label>
       </div>
       <div class="control-group filter-classloader" style="display: none;">
-        <input type="checkbox" id="hide-clojure" checked>
-        <label for="hide-clojure">Hide Clojure</label>
+        <input type="checkbox" id="show-clojure">
+        <label for="show-clojure">Show Clojure</label>
       </div>
       <div class="control-group filter-cctv-agent" style="display: none;">
-        <input type="checkbox" id="hide-cctv" checked>
-        <label for="hide-cctv">Hide CCTV & Agent</label>
+        <input type="checkbox" id="show-cctv">
+        <label for="show-cctv">Show CCTV & Agent</label>
       </div>
       <div class="search-container">
         <input type="text" id="search-input" placeholder="Search ns/symbol...">
@@ -293,15 +293,15 @@ function isCctvOrAgent(name) {
 // Apply filters to classloader data
 function filterClassloaderData(data) {
   if (!data) return data;
-  const hideJdk = document.getElementById('hide-jdk')?.checked ?? true;
-  const hideClojure = document.getElementById('hide-clojure')?.checked ?? true;
-  const hideCctv = document.getElementById('hide-cctv')?.checked ?? true;
+  const showJdk = document.getElementById('show-jdk')?.checked ?? false;
+  const showClojure = document.getElementById('show-clojure')?.checked ?? false;
+  const showCctv = document.getElementById('show-cctv')?.checked ?? false;
 
   return data.filter(item => {
     const fullName = item['full-name'] || item.ns || '';
-    if (hideJdk && isJdkClass(fullName)) return false;
-    if (hideClojure && isClojureStdlib(fullName)) return false;
-    if (hideCctv && isCctvOrAgent(fullName)) return false;
+    if (!showJdk && isJdkClass(fullName)) return false;
+    if (!showClojure && isClojureStdlib(fullName)) return false;
+    if (!showCctv && isCctvOrAgent(fullName)) return false;
     return true;
   });
 }
@@ -309,10 +309,10 @@ function filterClassloaderData(data) {
 // Apply filters to compiler data
 function filterCompilerData(data) {
   if (!data) return data;
-  const hideCctv = document.getElementById('hide-cctv')?.checked ?? true;
+  const showCctv = document.getElementById('show-cctv')?.checked ?? false;
 
   return data.filter(item => {
-    if (hideCctv && isCctvOrAgent(item.ns)) return false;
+    if (!showCctv && isCctvOrAgent(item.ns)) return false;
     return true;
   });
 }
@@ -1186,17 +1186,17 @@ function rebuildWithFilters() {
   }
 }
 
-const FILTER_CHECKBOX_IDS = ['hide-jdk', 'hide-clojure', 'hide-cctv'];
+const FILTER_CHECKBOX_IDS = ['show-jdk', 'show-clojure', 'show-cctv'];
 
-// Read checkbox states from URL params (default: true/checked)
+// Read checkbox states from URL params (default: false/unchecked)
 function initCheckboxesFromUrl() {
   const params = new URLSearchParams(window.location.search);
   FILTER_CHECKBOX_IDS.forEach(id => {
     const checkbox = document.getElementById(id);
     if (checkbox) {
       const paramValue = params.get(id);
-      // Default is checked (true), only uncheck if explicitly set to '0' or 'false'
-      checkbox.checked = paramValue !== '0' && paramValue !== 'false';
+      // Default is unchecked (false), only check if explicitly set to '1' or 'true'
+      checkbox.checked = paramValue === '1' || paramValue === 'true';
     }
   });
 }
@@ -1208,9 +1208,9 @@ function updateUrlFromCheckboxes() {
     const checkbox = document.getElementById(id);
     if (checkbox) {
       if (checkbox.checked) {
-        params.delete(id); // Default is checked, no need to store
+        params.set(id, '1'); // Store when checked (non-default)
       } else {
-        params.set(id, '0');
+        params.delete(id); // Default is unchecked, no need to store
       }
     }
   });
