@@ -31,6 +31,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .info-panel .metric-value { color: #93a1a1; font-weight: 500; display: inline-block; min-width: 40px; text-align: right; }
 .info-panel .badge { padding: 2px 6px; border-radius: 3px; font-size: 11px; color: #fff; }
 .info-panel .badge.unused { background: #e74c3c; }
+.info-panel .badge.unreferenced { background: #e67e22; }
 .info-panel .badge.failed { background: #586e75; }
 .highlight-overlay { position: absolute; pointer-events: none; border: 2px solid #fdf6e3; box-sizing: border-box; }
 .highlight-overlay.ancestor { border-color: #fdf6e3; }
@@ -224,8 +225,7 @@ const sourceConfigs = {
     metrics: [
       { key: 'bytecode-size', label: 'Bytecode Size (bytes)' },
       { key: 'field-count', label: 'Field Count (closed-overs)' },
-      { key: 'instruction-count', label: 'Instruction Count' },
-      { key: 'unreferenced?', label: 'Unreferenced' }
+      { key: 'instruction-count', label: 'Instruction Count' }
     ],
     defaultSize: 'bytecode-size',
     defaultColor: 'instruction-count'
@@ -801,7 +801,7 @@ function render() {
       if (d.data.metrics['failed?']) {
         cell.classList.add('failed');
       }
-      if (d.data.metrics['unused?']) {
+      if (d.data.metrics['unused?'] || d.data.metrics['unreferenced?']) {
         // Layer stripe pattern over gradient
         const stripes = 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(0,0,0,0.4) 3px, rgba(0,0,0,0.4) 6px)';
         cell.style.background = `${stripes}, ${gradient}`;
@@ -971,6 +971,8 @@ function showInfo(d) {
       html += '<span class="badge failed">Analysis Failed</span>';
     } else if (nodeData.metrics['unused?']) {
       html += '<span class="badge unused">Unused</span>';
+    } else if (nodeData.metrics['unreferenced?']) {
+      html += '<span class="badge unreferenced">Unreferenced</span>';
     }
   } else {
     // Summary for namespace
@@ -989,6 +991,10 @@ function showInfo(d) {
     const unusedCount = leaves.filter(l => l.metrics['unused?']).length;
     if (unusedCount > 0) {
       html += `<span class="metric">Unused: <span class="metric-value">${unusedCount}</span></span>`;
+    }
+    const unreferencedCount = leaves.filter(l => l.metrics['unreferenced?']).length;
+    if (unreferencedCount > 0) {
+      html += `<span class="metric">Unreferenced: <span class="metric-value">${unreferencedCount}</span></span>`;
     }
   }
 
