@@ -43,7 +43,6 @@
    Returns the absolute path written."
   [metrics-data path]
   (let [output {:version     1
-                :generated   (.toString (java.time.Instant/now))
                 :compiler    (:compiler metrics-data)
                 :classloader (:classloader metrics-data)}
         file (.getAbsolutePath (java.io.File. path))]
