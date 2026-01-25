@@ -14,5 +14,8 @@
   :agent {:jvm-opts ["-javaagent:metrics-agent/target/metrics-agent-0.1.0-SNAPSHOT.jar"]}
 
   :generate-metrics
-  {:main-opts ["-e" "(require '[clojure-compiler-treemap-view.analyze :as a] '[jsonista.core :as j]) (let [{:keys [result]} (a/analyze-captured)] (spit \"metrics.json\" (j/write-value-as-string {:version 1 :generated (.toString (java.time.Instant/now)) :namespaces [\"clojure-compiler-treemap-view\"] :compiler (:compiler result) :classloader (:classloader result)})))"]}}}
+  {:main-opts
+   ["-e"
+    "(do (require '[clojure-compiler-treemap-view.core :as cctv])
+         (cctv/export-captured-metrics \"metrics.json\"))"]}}}
 
