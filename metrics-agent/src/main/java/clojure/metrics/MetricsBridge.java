@@ -17,7 +17,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * Usage from Clojure:
  *   (import '[clojure.metrics MetricsBridge])
  *   (MetricsBridge/drainBuffer)  ; returns and clears all captured defs
- *   (MetricsBridge/peekBuffer)   ; returns without clearing
  */
 public class MetricsBridge {
 
@@ -82,16 +81,6 @@ public class MetricsBridge {
         Collection<Map<String, Object>> result = new ArrayList<>(BUFFER.values());
         BUFFER.clear();
         return result;
-    }
-
-    /**
-     * Peek at captured defs without clearing the buffer.
-     * Useful for debugging or inspection.
-     *
-     * @return Collection of captured def maps
-     */
-    public static Collection<Map<String, Object>> peekBuffer() {
-        return new ArrayList<>(BUFFER.values());
     }
 
     /**

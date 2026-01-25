@@ -61,12 +61,6 @@
   []
   (mapv extract-def-info (MetricsBridge/drainBuffer)))
 
-(defn peek-captured-defs
-  "Peek at captured def forms without clearing the buffer.
-   Returns the same format as get-captured-defs."
-  []
-  (mapv extract-def-info (MetricsBridge/peekBuffer)))
-
 (defn clear!
   "Clear all captured defs from the buffer."
   []
@@ -112,11 +106,6 @@
   "Clear all captured var references."
   []
   (VarRefBridge/clear))
-
-(defn var-reference-count
-  "Return the number of captured var references."
-  []
-  (VarRefBridge/size))
 
 (defn find-unused-vars
   "Find unused vars in the given namespaces using compiler hooks.
