@@ -1006,18 +1006,7 @@ async function init() {
     initSearch();
     render();
   } else {
-    // Try loading metrics.json from same directory (for static deployments)
-    try {
-      const response = await fetch('metrics.json');
-      if (response.ok) {
-        const jsonData = await response.json();
-        const flatData = jsonData.compiler ? jsonData : { compiler: jsonData };
-        initializeWithData(flatData);
-        return;
-      }
-    } catch (e) {
-      // metrics.json not found, show upload UI
-    }
+    // No data source - show upload UI
     showUploadOverlay();
   }
 }

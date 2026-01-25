@@ -87,7 +87,8 @@ jobs:
       - name: Deploy viewer and generate metrics
         run: |
           mkdir -p _site
-          cp resources/viewer.html _site/index.html
+          cp resources/viewer.html _site/viewer.html
+          echo '<!DOCTYPE html><meta http-equiv="refresh" content="0; url=viewer.html?data=metrics.json">' > _site/index.html
           clojure -M:agent -e "
           (require '[clojure-compiler-treemap-view.analyze :as cctv.analyze]
                    '[jsonista.core :as json])
