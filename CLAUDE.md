@@ -93,7 +93,7 @@ Raw vs expanded: Threading macros like `->` appear flat in raw metrics but neste
 ## Testing
 
 ```bash
-clj -M:agent -X:test
+clj -M:agent:test:runner
 ```
 
 Test fixtures in `test/clojure_compiler_treemap_view/fixtures/` - namespaces with known characteristics for assertions.

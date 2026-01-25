@@ -47,7 +47,7 @@ jobs:
         run: mvn -f metrics-agent/pom.xml package -q
 
       - name: Run tests
-        run: clojure -M:agent:test
+        run: clojure -M:agent:test:runner
 
   deploy:
     needs: test
