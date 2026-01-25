@@ -130,6 +130,11 @@ clojure_expressions_expanded{ns="clojure-compiler-treemap-view.analyze",name="ph
 clojure_max_depth_raw{ns="clojure-compiler-treemap-view.analyze",name="phase-expanded",line="16"} 1
 clojure_max_depth_expanded{ns="clojure-compiler-treemap-view.analyze",name="phase-expanded",line="16"} 1
 clojure_unused{ns="clojure-compiler-treemap-view.analyze",name="phase-expanded",line="16"} 0
+clojure_expressions_raw{ns="clojure-compiler-treemap-view.prometheus",name="format-prometheus",line="41"} 58
+clojure_expressions_expanded{ns="clojure-compiler-treemap-view.prometheus",name="format-prometheus",line="41"} 60
+clojure_max_depth_raw{ns="clojure-compiler-treemap-view.prometheus",name="format-prometheus",line="41"} 5
+clojure_max_depth_expanded{ns="clojure-compiler-treemap-view.prometheus",name="format-prometheus",line="41"} 7
+clojure_unused{ns="clojure-compiler-treemap-view.prometheus",name="format-prometheus",line="41"} 0
 clojure_expressions_raw{ns="clojure-compiler-treemap-view.analyze",name="add-unused-flags",line="134"} 41
 clojure_expressions_expanded{ns="clojure-compiler-treemap-view.analyze",name="add-unused-flags",line="134"} 43
 clojure_max_depth_raw{ns="clojure-compiler-treemap-view.analyze",name="add-unused-flags",line="134"} 6
@@ -165,11 +170,11 @@ clojure_expressions_expanded{ns="clojure-compiler-treemap-view.agent",name="get-
 clojure_max_depth_raw{ns="clojure-compiler-treemap-view.agent",name="get-captured-defs",line="48"} 3
 clojure_max_depth_expanded{ns="clojure-compiler-treemap-view.agent",name="get-captured-defs",line="48"} 5
 clojure_unused{ns="clojure-compiler-treemap-view.agent",name="get-captured-defs",line="48"} 0
-clojure_expressions_raw{ns="clojure-compiler-treemap-view.prometheus",name="write-prometheus",line="41"} 69
-clojure_expressions_expanded{ns="clojure-compiler-treemap-view.prometheus",name="write-prometheus",line="41"} 71
-clojure_max_depth_raw{ns="clojure-compiler-treemap-view.prometheus",name="write-prometheus",line="41"} 5
-clojure_max_depth_expanded{ns="clojure-compiler-treemap-view.prometheus",name="write-prometheus",line="41"} 7
-clojure_unused{ns="clojure-compiler-treemap-view.prometheus",name="write-prometheus",line="41"} 0
+clojure_expressions_raw{ns="clojure-compiler-treemap-view.prometheus",name="write-prometheus",line="62"} 23
+clojure_expressions_expanded{ns="clojure-compiler-treemap-view.prometheus",name="write-prometheus",line="62"} 25
+clojure_max_depth_raw{ns="clojure-compiler-treemap-view.prometheus",name="write-prometheus",line="62"} 5
+clojure_max_depth_expanded{ns="clojure-compiler-treemap-view.prometheus",name="write-prometheus",line="62"} 7
+clojure_unused{ns="clojure-compiler-treemap-view.prometheus",name="write-prometheus",line="62"} 0
 clojure_expressions_raw{ns="clojure-compiler-treemap-view.analyze",name="def-metrics-from-forms",line="97"} 40
 clojure_expressions_expanded{ns="clojure-compiler-treemap-view.analyze",name="def-metrics-from-forms",line="97"} 42
 clojure_max_depth_raw{ns="clojure-compiler-treemap-view.analyze",name="def-metrics-from-forms",line="97"} 4
@@ -208,6 +213,7 @@ clojure_bytecode_size{name="nonconforming",full_name="clojure.spec.alpha$nonconf
 clojure_bytecode_size{name="fn__289",full_name="clojure_compiler_treemap_view.analyze$process_captured_defs$iter__261__265$fn__266$fn__289"} 1507
 clojure_bytecode_size{name="generate_interface",full_name="clojure.core$generate_interface"} 7007
 clojure_bytecode_size{name="valid_QMARK_",full_name="clojure.spec.alpha$valid_QMARK_"} 2102
+clojure_bytecode_size{name="eval393",full_name="clojure_compiler_treemap_view.core$eval393"} 1612
 clojure_bytecode_size{name="qualified_ident_QMARK_",full_name="clojure.core$qualified_ident_QMARK_"} 1064
 clojure_bytecode_size{name="Delay",full_name="clojure.lang.Delay"} 1604
 clojure_bytecode_size{name="extend",full_name="clojure.core$extend"} 5435
@@ -342,6 +348,7 @@ clojure_bytecode_size{name="DynamicClassLoader",full_name="clojure.lang.DynamicC
 clojure_bytecode_size{name="print_throwable",full_name="clojure.core$print_throwable"} 4821
 clojure_bytecode_size{name="cycle",full_name="clojure.core$cycle"} 750
 clojure_bytecode_size{name="tagged_literal_QMARK_",full_name="clojure.core$tagged_literal_QMARK_"} 775
+clojure_bytecode_size{name="eval398",full_name="user$eval398"} 1632
 clojure_bytecode_size{name="class_name__GT_path",full_name="clojure_compiler_treemap_view.analyze$class_name__GT_path"} 1191
 clojure_bytecode_size{name="fn__9067",full_name="clojure.core.server$parse_props$fn__9067"} 2129
 clojure_bytecode_size{name="IReference",full_name="clojure.lang.IReference"} 314
@@ -528,6 +535,7 @@ clojure_bytecode_size{name="loading__6812__auto____362",full_name="clojure_compi
 clojure_bytecode_size{name="fn__2830",full_name="clojure.spec.gen.alpha$fn__2830"} 2201
 clojure_bytecode_size{name="skip_whitespace",full_name="clojure.main$skip_whitespace"} 2172
 clojure_bytecode_size{name="lazy_prims",full_name="clojure.spec.gen.alpha$lazy_prims"} 1807
+clojure_bytecode_size{name="fn__394",full_name="clojure_compiler_treemap_view.core$eval393$fn__394"} 1797
 clojure_bytecode_size{name="newline",full_name="clojure.core$newline"} 956
 clojure_bytecode_size{name="Box",full_name="clojure.lang.Box"} 352
 clojure_bytecode_size{name="iter__330__334",full_name="clojure_compiler_treemap_view.analyze$process_loaded_classes$iter__330__334"} 958
@@ -1355,7 +1363,7 @@ clojure_bytecode_size{name="fn__71",full_name="clojure.core.specs.alpha$fn__71"}
 clojure_bytecode_size{name="G__11562__11610",full_name="clojure.java.io$fn__11607$G__11562__11610"} 730
 clojure_bytecode_size{name="fn__2894",full_name="clojure.spec.gen.alpha$fn__2893$fn__2894"} 1126
 clojure_bytecode_size{name="fn__6196",full_name="clojure.core$fn__6196"} 2185
-clojure_bytecode_size{name="write_prometheus",full_name="clojure_compiler_treemap_view.prometheus$write_prometheus"} 4232
+clojure_bytecode_size{name="write_prometheus",full_name="clojure_compiler_treemap_view.prometheus$write_prometheus"} 1386
 clojure_bytecode_size{name="asm_type",full_name="clojure.core$asm_type"} 2632
 clojure_bytecode_size{name="FnExpr",full_name="clojure.lang.Compiler$FnExpr"} 11108
 clojure_bytecode_size{name="G__8516__8522",full_name="clojure.core$fn__8520$G__8516__8522"} 653
@@ -1722,6 +1730,7 @@ clojure_bytecode_size{name="reify__8422",full_name="clojure.core$reify__8422"} 1
 clojure_bytecode_size{name="reify__2046",full_name="clojure.spec.alpha$spec_impl$reify__2046"} 4285
 clojure_bytecode_size{name="ensure",full_name="clojure.core$ensure"} 698
 clojure_bytecode_size{name="core__init",full_name="clojure.core__init"} 342327
+clojure_bytecode_size{name="format_prometheus",full_name="clojure_compiler_treemap_view.prometheus$format_prometheus"} 3948
 clojure_bytecode_size{name="instance_QMARK___5488",full_name="clojure.core$instance_QMARK___5488"} 851
 clojure_bytecode_size{name="unchecked_subtract__inliner__5689",full_name="clojure.core$unchecked_subtract__inliner__5689"} 1525
 clojure_bytecode_size{name="do_cmod__6431",full_name="clojure.core$for$emit_bind__6408$do_cmod__6431"} 3720
@@ -2009,7 +2018,6 @@ clojure_bytecode_size{name="eval247",full_name="clojure_compiler_treemap_view.an
 clojure_bytecode_size{name="fn__7377",full_name="clojure.core$fn__7377"} 970
 clojure_bytecode_size{name="map_QMARK___5496",full_name="clojure.core$map_QMARK___5496"} 765
 clojure_bytecode_size{name="parse_boolean",full_name="clojure.core$parse_boolean"} 1341
-clojure_bytecode_size{name="fn__393",full_name="clojure_compiler_treemap_view.core$eval392$fn__393"} 1797
 clojure_bytecode_size{name="iter__211__217",full_name="clojure_compiler_treemap_view.agent$find_unused_vars$iter__209__215$fn__216$iter__211__217"} 975
 clojure_bytecode_size{name="print_timestamp",full_name="clojure.instant$print_timestamp"} 1684
 clojure_bytecode_size{name="fn__266",full_name="clojure_compiler_treemap_view.analyze$process_captured_defs$iter__261__265$fn__266"} 6038
@@ -2071,7 +2079,6 @@ clojure_bytecode_size{name="re_seq",full_name="clojure.core$re_seq"} 836
 clojure_bytecode_size{name="KeywordExpr",full_name="clojure.lang.Compiler$KeywordExpr"} 1508
 clojure_bytecode_size{name="merge",full_name="clojure.spec.alpha$merge"} 2225
 clojure_bytecode_size{name="some__GT_",full_name="clojure.core$some__GT_"} 2646
-clojure_bytecode_size{name="eval397",full_name="user$eval397"} 1632
 clojure_bytecode_size{name="ITransientCollection",full_name="clojure.lang.ITransientCollection"} 269
 clojure_bytecode_size{name="fn__8505",full_name="clojure.instant$fn__8505"} 692
 clojure_bytecode_size{name="fn__8539",full_name="clojure.uuid$fn__8539"} 1334
@@ -2203,7 +2210,6 @@ clojure_bytecode_size{name="fn__9005",full_name="clojure.core.server$fn__9005"} 
 clojure_bytecode_size{name="fn__8497",full_name="clojure.instant$fn__8496$fn__8497"} 911
 clojure_bytecode_size{name="split_lines",full_name="clojure.string$split_lines"} 852
 clojure_bytecode_size{name="BindingInit",full_name="clojure.lang.Compiler$BindingInit"} 912
-clojure_bytecode_size{name="eval392",full_name="clojure_compiler_treemap_view.core$eval392"} 1612
 clojure_bytecode_size{name="loading__6812__auto____8537",full_name="clojure.uuid$loading__6812__auto____8537"} 1567
 clojure_bytecode_size{name="compiler_entry__GT_lines",full_name="clojure_compiler_treemap_view.prometheus$compiler_entry__GT_lines"} 4446
 clojure_bytecode_size{name="Parser",full_name="clojure.lang.Compiler$ThrowExpr$Parser"} 1682
