@@ -114,4 +114,4 @@ All analysis functions (`analyze-nses`, `analyze-captured`) drain the capture bu
 
 **Viewer**: D3.js is inlined in `viewer.html` for browser visualization. This is a static file, not a runtime dependency of the Clojure library.
 
-**Build-time**: Java metrics agent (in `metrics-agent/` directory) must be loaded via `-javaagent` flag.
+**Agent**: Java metrics agent (in `metrics-agent/` directory) uses [ByteBuddy](https://bytebuddy.net/) for compiler instrumentation. Must be loaded via `-javaagent` flag.

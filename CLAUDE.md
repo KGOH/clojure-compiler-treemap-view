@@ -123,7 +123,7 @@ Test fixtures in `test/clojure_compiler_treemap_view/fixtures/` - namespaces wit
 
 **Viewer**: D3.js is inlined in `viewer.html` for browser visualization (static file, not a Clojure dependency).
 
-**Build-time**: Java metrics agent (via -javaagent flag).
+**Agent**: Java metrics agent (via -javaagent flag) uses ByteBuddy for compiler instrumentation.
 
 ## Agent Requirement
 
