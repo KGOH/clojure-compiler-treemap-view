@@ -72,24 +72,24 @@ jobs:
       - name: Generate metrics
         run: |
           clojure -M:agent:generate-metrics
-          mv metrics.json metrics.json.new
+          mv metrics.prom metrics.prom.new
       - name: Commit metrics if changed
         run: |
-          # Compare ignoring timestamp
-          if [ -f metrics.json ]; then
-            OLD_DATA=$(jq -S 'del(.generated)' metrics.json)
-            NEW_DATA=$(jq -S 'del(.generated)' metrics.json.new)
+          # Compare ignoring comments (which may have timestamps)
+          if [ -f metrics.prom ]; then
+            OLD_DATA=$(grep -v '^#' metrics.prom | sort)
+            NEW_DATA=$(grep -v '^#' metrics.prom.new | sort)
             if [ "$OLD_DATA" = "$NEW_DATA" ]; then
               echo "Metrics unchanged, skipping commit"
-              rm metrics.json.new
+              rm metrics.prom.new
               exit 0
             fi
           fi
 
-          mv metrics.json.new metrics.json
+          mv metrics.prom.new metrics.prom
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add metrics.json
-          git commit -m "Update metrics.json [skip ci]"
+          git add metrics.prom
+          git commit -m "Update metrics.prom [skip ci]"
           git push

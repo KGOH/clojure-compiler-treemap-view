@@ -1,7 +1,6 @@
 {:paths ["src" "resources"]
 
- :deps {org.clojure/clojure {:mvn/version "1.12.0"}
-        metosin/jsonista    {:mvn/version "0.3.12"}}
+ :deps {org.clojure/clojure {:mvn/version "1.12.0"}}
 
  :aliases
  {:test {:extra-paths ["test"]}
@@ -14,5 +13,5 @@
   :agent {:jvm-opts ["-javaagent:metrics-agent/target/metrics-agent-0.1.0-SNAPSHOT.jar"]}
 
   :generate-metrics
-  {:main-opts ["-e" "(do (require '[clojure-compiler-treemap-view.core :as cctv]) (cctv/write-metrics (:result (cctv/analyze-captured)) \"metrics.json\"))"]}}}
+  {:main-opts ["-e" "(do (require '[clojure-compiler-treemap-view.core :as cctv]) (cctv/write-metrics (:result (cctv/analyze-captured)) \"metrics.prom\"))"]}}}
 

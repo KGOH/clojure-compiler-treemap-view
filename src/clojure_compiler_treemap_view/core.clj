@@ -1,7 +1,7 @@
 (ns clojure-compiler-treemap-view.core
   "Public API for clojure-compiler-treemap-view."
   (:require [clojure-compiler-treemap-view.analyze :as cctv.analyze]
-            [jsonista.core :as json]))
+            [clojure-compiler-treemap-view.prometheus :as prom]))
 
 (def analyze-captured
   "Analyze already-captured def forms without reloading namespaces.
@@ -35,28 +35,23 @@
   cctv.analyze/analyze-nses)
 
 (defn write-metrics
-  "Write metrics data to a JSON file.
+  "Write metrics data in Prometheus format.
 
    metrics-data should be a map with :compiler and :classloader keys.
    path is the output file path.
 
    Returns the absolute path written."
   [metrics-data path]
-  (let [output {:version     1
-                :compiler    (:compiler metrics-data)
-                :classloader (:classloader metrics-data)}
-        file (.getAbsolutePath (java.io.File. path))]
-    (spit file (json/write-value-as-string output (json/object-mapper {:pretty true})))
-    file))
+  (prom/write-prometheus metrics-data path))
 
 (comment
   ;; Using captured forms (after loading with agent)
   (def analyzed (analyze-captured))
-  (def metrics-path (write-metrics (:result analyzed) "metrics.json"))
+  (def metrics-path (write-metrics (:result analyzed) "metrics.prom"))
 
   ;; Using analyze-nses (reloads namespaces)
   (def analyzed (analyze-nses (->> (all-ns) (map ns-name))))
-  (def metrics-path (write-metrics (:result analyzed) "metrics.json"))
+  (def metrics-path (write-metrics (:result analyzed) "metrics.prom"))
 
   ;; Open in browser
   (clojure.java.browse/browse-url (str "file://" (.getAbsolutePath (java.io.File. "viewer.html")) "?data=file://" metrics-path))

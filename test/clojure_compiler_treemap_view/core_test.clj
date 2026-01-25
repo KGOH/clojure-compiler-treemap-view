@@ -2,8 +2,7 @@
   (:require [clojure.test :refer [deftest testing is]]
             [clojure-compiler-treemap-view.core :as cctv]
             [clojure.string :as str]
-            [clojure.java.io :as io]
-            [jsonista.core :as json]))
+            [clojure.java.io :as io]))
 
 ;; Ensure fixture namespaces are loaded
 (require 'clojure-compiler-treemap-view.fixtures.alpha
@@ -12,17 +11,19 @@
          'clojure-compiler-treemap-view.fixtures.beta)
 
 (deftest test-write-metrics
-  (testing "write-metrics writes valid JSON"
-    (let [path (str (java.io.File/createTempFile "test-metrics" ".json"))
+  (testing "write-metrics writes valid Prometheus format"
+    (let [path (str (java.io.File/createTempFile "test-metrics" ".prom"))
           {:keys [result errors]} (cctv/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha])
           written-path (cctv/write-metrics result path)
           content (slurp written-path)
-          data (json/read-value content)]
+          lines (str/split-lines content)]
       (is (empty? errors))
-      (is (= 1 (get data "version")))
-      (is (get data "generated"))
-      (is (seq (get data "compiler")))
-      (is (seq (get data "classloader"))))))
+      ;; Check header present
+      (is (str/starts-with? (first lines) "# Clojure code metrics"))
+      ;; Check compiler metrics present
+      (is (some #(str/starts-with? % "clojure_expressions_raw{") lines))
+      ;; Check classloader metrics present
+      (is (some #(str/starts-with? % "clojure_bytecode_size{") lines)))))
 
 (deftest test-viewer-html-exists
   (testing "pre-built viewer.html exists and is valid"

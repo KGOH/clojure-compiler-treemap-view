@@ -898,17 +898,91 @@ function hideUploadOverlay() {
   if (uploadOverlay) uploadOverlay.classList.remove('visible');
 }
 
+// =============================================================================
+// Prometheus Format Parser
+// =============================================================================
+
+function parsePrometheus(text) {
+  const compiler = new Map();
+  const classloader = new Map();
+  const metricRegex = /^(\w+)\{([^}]*)\}\s+(\S+)$/;
+  const labelRegex = /(\w+)="((?:[^"\\]|\\.)*)"/g;
+
+  function unescapeLabel(s) {
+    return s.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+  }
+
+  function parseLabels(labelStr) {
+    const labels = {};
+    let match;
+    while ((match = labelRegex.exec(labelStr)) !== null) {
+      labels[match[1]] = unescapeLabel(match[2]);
+    }
+    labelRegex.lastIndex = 0;
+    return labels;
+  }
+
+  for (const line of text.split('\n')) {
+    if (line.startsWith('#') || line.trim() === '') continue;
+    const match = line.match(metricRegex);
+    if (!match) continue;
+
+    const [, metricName, labelStr, valueStr] = match;
+    const labels = parseLabels(labelStr);
+    const value = parseFloat(valueStr);
+
+    if (metricName === 'clojure_bytecode_size') {
+      const key = labels.full_name || `${labels.ns}|${labels.name}`;
+      if (!classloader.has(key)) {
+        classloader.set(key, {
+          name: labels.name, ns: labels.ns || null,
+          'full-name': labels.full_name || null, file: null, line: null, metrics: {}
+        });
+      }
+      classloader.get(key).metrics['bytecode-size'] = value;
+    } else if (metricName.startsWith('clojure_')) {
+      const key = `${labels.ns}|${labels.name}|${labels.line}`;
+      if (!compiler.has(key)) {
+        compiler.set(key, {
+          name: labels.name, ns: labels.ns, file: null,
+          line: labels.line ? parseInt(labels.line, 10) : null, metrics: {}
+        });
+      }
+      const entry = compiler.get(key);
+      const metricMap = {
+        'clojure_expressions_raw': 'expressions-raw',
+        'clojure_expressions_expanded': 'expressions-expanded',
+        'clojure_max_depth_raw': 'max-depth-raw',
+        'clojure_max_depth_expanded': 'max-depth-expanded',
+        'clojure_unused': 'unused?'
+      };
+      const jsonKey = metricMap[metricName];
+      if (jsonKey) {
+        entry.metrics[jsonKey] = jsonKey === 'unused?' ? value === 1 : value;
+      }
+    }
+  }
+  return { compiler: Array.from(compiler.values()), classloader: Array.from(classloader.values()) };
+}
+
+function parseMetricsFile(text) {
+  const trimmed = text.trim();
+  return (trimmed.startsWith('{') || trimmed.startsWith('['))
+    ? JSON.parse(text)
+    : parsePrometheus(text);
+}
+
 function loadDataFromFile(file) {
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
-      const jsonData = JSON.parse(e.target.result);
+      const metricsData = parseMetricsFile(e.target.result);
       // Handle both raw format and wrapped format with metadata
-      const flatData = jsonData.compiler ? jsonData : { compiler: jsonData };
+      const flatData = metricsData.compiler ? metricsData : { compiler: metricsData };
       initializeWithData(flatData);
       hideUploadOverlay();
     } catch (err) {
-      alert('Failed to parse JSON file: ' + err.message);
+      alert('Failed to parse metrics file: ' + err.message);
     }
   };
   reader.readAsText(file);
@@ -981,8 +1055,9 @@ async function loadDataFromUrl(url) {
   try {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const jsonData = await response.json();
-    const flatData = jsonData.compiler ? jsonData : { compiler: jsonData };
+    const text = await response.text();
+    const metricsData = parseMetricsFile(text);
+    const flatData = metricsData.compiler ? metricsData : { compiler: metricsData };
     initializeWithData(flatData);
   } catch (err) {
     alert(`Failed to load data from ${url}: ${err.message}`);
