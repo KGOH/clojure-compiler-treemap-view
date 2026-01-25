@@ -223,19 +223,23 @@
   (str/split ns-str #"\."))
 
 (defn- add-to-map-tree
-  "Add a leaf to a nested map structure. O(1) per level."
+  "Add a node to a nested map structure. O(1) per level.
+   Nodes can have both :metrics and :children (e.g. a function with closures)."
   [tree path ns-str metrics]
   (if (= 1 (count path))
-    (assoc tree (first path) {:leaf? true :ns ns-str :metrics metrics})
-    (update tree (first path) (fnil add-to-map-tree {}) (rest path) ns-str metrics)))
+    ;; Add/merge metrics onto existing node (which may already have children)
+    (update tree (first path) merge {:ns ns-str :metrics metrics})
+    ;; Recurse into :children
+    (update-in tree [(first path) :children] (fnil add-to-map-tree {}) (rest path) ns-str metrics)))
 
 (defn- map-tree->d3-tree
-  "Convert nested map structure to D3-compatible tree with :name and :children."
+  "Convert nested map structure to D3-compatible tree with :name and :children.
+   Nodes can have both :metrics and :children."
   [name node]
-  (if (:leaf? node)
-    {:name name :ns (:ns node) :metrics (:metrics node)}
-    {:name name
-     :children (mapv (fn [[k v]] (map-tree->d3-tree k v)) node)}))
+  (cond-> {:name name}
+    (:metrics node) (assoc :ns (:ns node) :metrics (:metrics node))
+    (:children node) (assoc :children (mapv (fn [[k v]] (map-tree->d3-tree k v))
+                                            (:children node)))))
 
 (defn build-hierarchy
   "Build D3-compatible hierarchy from flat function data.
@@ -249,7 +253,7 @@
                        (add-to-map-tree tree path ns metrics)))
                    {}
                    fn-data)]
-    (map-tree->d3-tree "root" map-tree)))
+    (map-tree->d3-tree "root" {:children map-tree})))
 
 ;; ============================================================================
 ;; Class Loading Data
@@ -298,4 +302,4 @@
                        (add-to-map-tree tree path ns metrics)))
                    {}
                    class-data)]
-    (map-tree->d3-tree "root" map-tree)))
+    (map-tree->d3-tree "root" {:children map-tree})))
