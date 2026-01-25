@@ -71,17 +71,8 @@ jobs:
         run: mvn -f metrics-agent/pom.xml package -q
       - name: Generate metrics
         run: |
-          clojure -M:agent -e "
-          (require '[clojure-compiler-treemap-view.analyze :as cctv.analyze]
-                   '[jsonista.core :as json])
-          (let [{:keys [result]} (cctv.analyze/analyze-captured)
-                output {:version 1
-                        :generated (.toString (java.time.Instant/now))
-                        :namespaces [\"clojure-compiler-treemap-view\"]
-                        :compiler (:compiler result)
-                        :classloader (:classloader result)}]
-            (spit \"metrics.json.new\" (json/write-value-as-string output)))
-          "
+          clojure -M:agent:generate-metrics
+          mv metrics.json metrics.json.new
       - name: Commit metrics if changed
         run: |
           # Compare ignoring timestamp
