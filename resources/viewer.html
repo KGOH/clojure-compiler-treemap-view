@@ -967,6 +967,8 @@ function initializeWithData(flatData) {
   metricsOptions = currentSource ? currentSource.metrics : [];
 
   if (data) {
+    currentNode = data;
+    pathStack = [];
     buildChildMaps(data);
     initSourceSelector();
     initDropdowns();
