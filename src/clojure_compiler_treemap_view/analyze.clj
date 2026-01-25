@@ -226,13 +226,13 @@
 (defn- process-loaded-classes
   "Transform loaded classes into fn-data format for hierarchy building.
 
-   Takes map of {class-name -> {:bytecode-size n :field-count n}} and set of
-   namespace prefixes to filter by (munged, e.g. \"foo_bar\" not \"foo-bar\").
+   Takes map of {class-name -> {:bytecode-size n :field-count n :instruction-count n}}
+   and set of namespace prefixes to filter by (munged, e.g. \"foo_bar\" not \"foo-bar\").
 
    Returns vector of maps with :name :ns :full-name :file :line :metrics"
   [classes ns-prefixes]
   (vec
-    (for [[class-name {:keys [bytecode-size field-count]}] classes
+    (for [[class-name {:keys [bytecode-size field-count instruction-count]}] classes
           :let [path (class-name->path class-name)
                 name (last path)]
           :when (or (nil? ns-prefixes)
@@ -243,4 +243,5 @@
        :file nil
        :line nil
        :metrics {:bytecode-size bytecode-size
-                 :field-count field-count}})))
+                 :field-count field-count
+                 :instruction-count instruction-count}})))

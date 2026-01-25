@@ -19,11 +19,12 @@ public class ClassLoadBridge {
     // Metrics array indices
     public static final int IDX_BYTECODE_SIZE = 0;
     public static final int IDX_FIELD_COUNT = 1;
-    public static final int METRICS_LENGTH = 2;
+    public static final int IDX_INSTRUCTION_COUNT = 2;
+    public static final int METRICS_LENGTH = 3;
 
     /**
      * Map of class name (dotted format) to metrics array.
-     * Index 0 = bytecode size, Index 1 = field count
+     * Index 0 = bytecode size, Index 1 = field count, Index 2 = instruction count
      */
     private static final ConcurrentHashMap<String, int[]> LOADED_CLASSES =
         new ConcurrentHashMap<>();
@@ -34,20 +35,22 @@ public class ClassLoadBridge {
      * @param className Internal class name format (com/foo/Bar)
      * @param bytecodeSize Size of class bytecode in bytes
      * @param fieldCount Number of fields in the class (-1 if unknown)
+     * @param instructionCount Total JVM instructions in the class (-1 if unknown)
      */
-    public static void capture(String className, int bytecodeSize, int fieldCount) {
+    public static void capture(String className, int bytecodeSize, int fieldCount, int instructionCount) {
         // Convert internal name (com/foo/Bar) to dotted (com.foo.Bar)
         String normalizedName = className.replace('/', '.');
         int[] metrics = new int[METRICS_LENGTH];
         metrics[IDX_BYTECODE_SIZE] = bytecodeSize;
         metrics[IDX_FIELD_COUNT] = fieldCount;
+        metrics[IDX_INSTRUCTION_COUNT] = instructionCount;
         LOADED_CLASSES.put(normalizedName, metrics);
     }
 
     /**
      * Get a copy of all loaded classes with metrics.
      *
-     * @return Map of class name to metrics array [bytecodeSize, fieldCount]
+     * @return Map of class name to metrics array [bytecodeSize, fieldCount, instructionCount]
      */
     public static Map<String, int[]> getLoadedClasses() {
         return new HashMap<>(LOADED_CLASSES);
@@ -96,5 +99,16 @@ public class ClassLoadBridge {
     public static int getFieldCount(String className) {
         int[] metrics = LOADED_CLASSES.get(className);
         return metrics != null ? metrics[IDX_FIELD_COUNT] : -1;
+    }
+
+    /**
+     * Get instruction count for a specific class.
+     *
+     * @param className Dotted class name (com.foo.Bar)
+     * @return Instruction count or -1 if not found/unknown
+     */
+    public static int getInstructionCount(String className) {
+        int[] metrics = LOADED_CLASSES.get(className);
+        return metrics != null ? metrics[IDX_INSTRUCTION_COUNT] : -1;
     }
 }

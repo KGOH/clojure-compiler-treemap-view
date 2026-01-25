@@ -223,10 +223,11 @@ const sourceConfigs = {
     label: 'Class Loader',
     metrics: [
       { key: 'bytecode-size', label: 'Bytecode Size (bytes)' },
-      { key: 'field-count', label: 'Field Count (closed-overs)' }
+      { key: 'field-count', label: 'Field Count (closed-overs)' },
+      { key: 'instruction-count', label: 'Instruction Count' }
     ],
     defaultSize: 'bytecode-size',
-    defaultColor: 'field-count'
+    defaultColor: 'instruction-count'
   }
 };
 
@@ -1047,7 +1048,7 @@ function parsePrometheus(text) {
     const labels = parseLabels(labelStr);
     const value = parseFloat(valueStr);
 
-    if (metricName === 'clojure_bytecode_size' || metricName === 'clojure_field_count') {
+    if (metricName === 'clojure_bytecode_size' || metricName === 'clojure_field_count' || metricName === 'clojure_instruction_count') {
       const key = labels.full_name || `${labels.ns}|${labels.name}`;
       if (!classloader.has(key)) {
         classloader.set(key, {
@@ -1055,8 +1056,12 @@ function parsePrometheus(text) {
           'full-name': labels.full_name || null, file: null, line: null, metrics: {}
         });
       }
-      const metricKey = metricName === 'clojure_bytecode_size' ? 'bytecode-size' : 'field-count';
-      classloader.get(key).metrics[metricKey] = value;
+      const metricKeyMap = {
+        'clojure_bytecode_size': 'bytecode-size',
+        'clojure_field_count': 'field-count',
+        'clojure_instruction_count': 'instruction-count'
+      };
+      classloader.get(key).metrics[metricKeyMap[metricName]] = value;
     } else if (metricName.startsWith('clojure_')) {
       const key = `${labels.ns}|${labels.name}|${labels.line}`;
       if (!compiler.has(key)) {

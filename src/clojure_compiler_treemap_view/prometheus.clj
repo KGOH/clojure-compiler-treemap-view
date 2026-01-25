@@ -37,7 +37,8 @@
 (defn- classloader-entry->lines [{:keys [name ns full-name metrics]}]
   (let [labels {:ns ns :name name :full_name full-name}]
     [(metric-line "clojure_bytecode_size" labels (:bytecode-size metrics))
-     (metric-line "clojure_field_count" labels (:field-count metrics))]))
+     (metric-line "clojure_field_count" labels (:field-count metrics))
+     (metric-line "clojure_instruction_count" labels (:instruction-count metrics))]))
 
 (defn format-prometheus
   "Format metrics data as Prometheus exposition format string."
@@ -57,7 +58,9 @@
         classloader-header ["# HELP clojure_bytecode_size Class bytecode size in bytes"
                             "# TYPE clojure_bytecode_size gauge"
                             "# HELP clojure_field_count Number of fields in class"
-                            "# TYPE clojure_field_count gauge"]
+                            "# TYPE clojure_field_count gauge"
+                            "# HELP clojure_instruction_count Total JVM instructions in class"
+                            "# TYPE clojure_instruction_count gauge"]
         classloader-lines (mapcat classloader-entry->lines (:classloader metrics-data))
         all-lines (concat header [""] compiler-header compiler-lines [""] classloader-header classloader-lines)]
     (str/join "\n" all-lines)))
