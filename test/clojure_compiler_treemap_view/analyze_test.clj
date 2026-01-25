@@ -38,18 +38,8 @@
     (is (= 3 (cctv.analyze/sexp-max-depth '(a (b (c x))))))))
 
 ;; ============================================================================
-;; Return Format Tests (all analyze-* functions should return same structure)
+;; Return Format Tests
 ;; ============================================================================
-
-(deftest test-analyze-ns-return-format
-  (testing "analyze-ns returns {:result {:compiler [...] :classloader [...]} :errors [...]}"
-    (let [{:keys [result errors]} (cctv.analyze/analyze-ns 'clojure-compiler-treemap-view.fixtures.alpha)]
-      (is (= [] errors))
-      (is (map? result) "result should be a map")
-      (is (contains? result :compiler) "result should have :compiler key")
-      (is (contains? result :classloader) "result should have :classloader key")
-      (is (vector? (:compiler result)) "compiler data should be a vector")
-      (is (vector? (:classloader result)) "classloader data should be a vector"))))
 
 (deftest test-analyze-nses-return-format
   (testing "analyze-nses returns {:result {:compiler [...] :classloader [...]} :errors [...]}"
@@ -79,9 +69,9 @@
 ;; Namespace Analysis Tests (via compiler hooks)
 ;; ============================================================================
 
-(deftest test-analyze-ns
+(deftest test-analyze-nses-single-namespace
   (testing "returns function data for namespace with all metrics"
-    (let [{:keys [result errors]} (cctv.analyze/analyze-ns 'clojure-compiler-treemap-view.fixtures.alpha)
+    (let [{:keys [result errors]} (cctv.analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha])
           compiler-result (:compiler result)]
       (is (= [] errors) "should have no errors")
       (is (>= (count compiler-result) 3))
@@ -95,7 +85,7 @@
 
 (deftest test-raw-vs-expanded-metrics
   (testing "raw metrics are less than expanded for threading macros"
-    (let [{:keys [result]} (cctv.analyze/analyze-ns 'clojure-compiler-treemap-view.fixtures.gamma)
+    (let [{:keys [result]} (cctv.analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.gamma])
           compiler-result (:compiler result)
           threading (first (filter #(= "threading-simple" (:name %)) compiler-result))]
       ;; Raw depth should be less (threading is flat in source)
@@ -121,7 +111,7 @@
       (is (not (contains? unused-vars "clojure-compiler-treemap-view.fixtures.alpha.utils/helper")))
       (is (not (contains? unused-vars "clojure-compiler-treemap-view.fixtures.alpha.utils/format-output"))))))
 
-(deftest test-analyze-nses
+(deftest test-analyze-nses-unused-detection
   (testing "adds unused? flag to metrics"
     (let [{:keys [result errors]} (cctv.analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha
                                                           clojure-compiler-treemap-view.fixtures.alpha.utils
@@ -135,9 +125,9 @@
       (is (get-in unused [:metrics :unused?]) "unused-fn should be marked unused")
       (is (not (get-in helper [:metrics :unused?])) "helper should not be marked unused"))))
 
-(deftest test-analyze-ns-metrics-format
+(deftest test-analyze-nses-metrics-format
   (testing "extracts all metrics in expected format"
-    (let [{:keys [result]} (cctv.analyze/analyze-ns 'clojure-compiler-treemap-view.fixtures.alpha)
+    (let [{:keys [result]} (cctv.analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha])
           compiler-result (:compiler result)
           simple (first (filter #(= "simple-fn" (:name %)) compiler-result))]
       (is simple "simple-fn should be in analyzed results")
@@ -148,10 +138,9 @@
       (is (number? (get-in simple [:metrics :max-depth-raw])))
       (is (number? (get-in simple [:metrics :max-depth-expanded]))))))
 
-(deftest test-analyze-multiple-namespaces
-  (testing "can analyze multiple namespaces in one call"
-    ;; This tests that analyze-ns properly filters to only the target namespace
-    (let [{:keys [result]} (cctv.analyze/analyze-ns 'clojure-compiler-treemap-view.fixtures.beta)
+(deftest test-analyze-nses-filters-by-namespace
+  (testing "analyze-nses filters to only requested namespaces"
+    (let [{:keys [result]} (cctv.analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.beta])
           compiler-result (:compiler result)]
       (is (seq compiler-result) "should have some analyzed forms")
       (doseq [fn-data compiler-result]
@@ -165,13 +154,13 @@
 
 (deftest test-analyze-empty-namespace
   (testing "empty namespace returns empty results"
-    (let [{:keys [result errors]} (cctv.analyze/analyze-ns 'clojure-compiler-treemap-view.fixtures.empty)]
+    (let [{:keys [result errors]} (cctv.analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.empty])]
       (is (= [] (:compiler result)))
       (is (= [] errors)))))
 
 (deftest test-analyze-broken-namespace
   (testing "broken namespace returns empty results with error"
-    (let [{:keys [result errors]} (cctv.analyze/analyze-ns 'clojure-compiler-treemap-view.fixtures.broken)]
+    (let [{:keys [result errors]} (cctv.analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.broken])]
       (is (= [] (:compiler result)))
       (is (= 1 (count errors)))
       (is (= 'clojure-compiler-treemap-view.fixtures.broken (:ns (first errors)))))))

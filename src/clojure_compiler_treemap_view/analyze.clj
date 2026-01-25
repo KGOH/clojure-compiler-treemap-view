@@ -180,42 +180,6 @@
 ;; Namespace Analysis via Hooks (with reload)
 ;; ============================================================================
 
-(defn analyze-ns
-  "Analyze a single namespace using compiler hooks.
-
-   Clears the capture buffer, reloads the namespace (triggering compilation),
-   then processes the captured def forms into metrics.
-
-   Returns {:result {:compiler [...] :classloader [...]} :errors [...]} where:
-     :compiler   - vector of fn-data maps
-     :classloader - vector of class data maps with :bytecode-size metric
-     :errors     - vector of error maps from this analysis run
-
-   Each compiler entry contains:
-     :name    - Var name (string)
-     :ns      - Namespace (string)
-     :file    - Source file (nil - hooks don't capture this)
-     :line    - Line number
-     :metrics - Map of metrics
-
-   WARNING: Not thread-safe. Do not call concurrently from multiple threads."
-  [ns-sym]
-  (with-error-tracking
-    (try
-      (with-capture
-        (require ns-sym :reload)
-        (let [ns-str (str ns-sym)
-              compiler-data (process-captured-defs captured #{ns-str})
-              ;; Class loader data (munge ns name: foo-bar -> foo_bar)
-              ns-prefix (str/replace ns-str "-" "_")
-              classes (agent/get-loaded-classes)
-              class-data (process-loaded-classes classes #{ns-prefix})]
-          {:compiler compiler-data
-           :classloader class-data}))
-      (catch Throwable e
-        (record-error! ns-sym :analyze e)
-        {:compiler [] :classloader []}))))
-
 (defn analyze-nses
   "Analyze multiple namespaces using compiler hooks.
 

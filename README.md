@@ -99,7 +99,7 @@ This reveals the true cost of dependencies. A "simple" library that pulls in 50 
 
 ### Buffer Drainage
 
-All analysis functions (`treemap!`, `analyze-ns`, `analyze-nses`, `analyze-captured`) drain the capture buffer. After calling any of these, the buffer is empty until more code compiles. This means subsequent calls return empty results unless you've loaded more code. Store the result if you need it later. This design exists because there's only one Clojure compiler per JVM—the global buffer prevents stale data from previous analyses, ensuring each analysis reflects a clean capture of what actually compiled.
+All analysis functions (`treemap!`, `analyze-nses`, `analyze-captured`) drain the capture buffer. After calling any of these, the buffer is empty until more code compiles. This means subsequent calls return empty results unless you've loaded more code. Store the result if you need it later. This design exists because there's only one Clojure compiler per JVM—the global buffer prevents stale data from previous analyses, ensuring each analysis reflects a clean capture of what actually compiled.
 
 ## Available Metrics
 

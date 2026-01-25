@@ -11,16 +11,17 @@ clj -M:agent
 
 ```clojure
 (require '[clojure-compiler-treemap-view.core :as cctv])
-(cctv/treemap! '[my.namespace])           ; opens browser
-(cctv/treemap! '[ns1 ns2] :size :expressions-raw :color :max-depth-expanded)
+(cctv/treemap! '[my.namespace])           ; opens browser with compiler source
+(cctv/treemap! '[ns1 ns2] :source :classloader)  ; show bytecode metrics
 ```
 
 ## Architecture
 
 ```
-analyze-ns -> analyze-nses -> build-hierarchy -> render-html -> open-html
-     |             |               |                 |
-hook capture   unused detect   flat->tree      inject into template
+analyze-nses -> build-hierarchy -> render-html -> open-html
+      |               |                 |
+ capture all      flat->tree      inject into template
+ (defs+classes)
 ```
 
 **Core files**:
@@ -34,14 +35,15 @@ hook capture   unused detect   flat->tree      inject into template
 ### agent.clj
 
 - `get-captured-defs` - Drain captured def forms from agent buffer
+- `get-loaded-classes` - Get map of class-name -> bytecode-size
 - `find-unused-vars` - Find vars defined but never referenced via VarRefBridge
-- `clear!`, `clear-var-references!` - Reset capture buffers
+- `clear!`, `clear-var-references!`, `clear-loaded-classes!` - Reset capture buffers
 
 ### analyze.clj
 
-- `analyze-ns` - Clears buffer, reloads namespace, processes captured defs. Returns `{:analyzed [...] :asts []}`.
-- `analyze-nses` - Aggregates namespaces, runs `find-unused-vars`, adds `:unused?` flag.
+- `analyze-nses` - Clears buffers, reloads namespaces, returns `{:result {:compiler [...] :classloader [...]} :errors [...]}`.
 - `build-hierarchy` - Converts flat fn-data to D3-compatible nested tree.
+- `build-class-hierarchy` - Converts class data to D3-compatible nested tree.
 - `count-sexp-forms`, `sexp-max-depth` - S-expression metrics
 
 ### core.clj
@@ -51,6 +53,7 @@ hook capture   unused detect   flat->tree      inject into template
 
 ## Metrics
 
+**Compiler source** (def forms):
 | Metric | Description |
 |--------|-------------|
 | `:expressions-raw` | Form count from source (pre-macro-expansion) |
@@ -59,21 +62,30 @@ hook capture   unused detect   flat->tree      inject into template
 | `:max-depth-expanded` | Nesting depth after macro-expansion |
 | `:unused?` | True if var is defined but never referenced |
 
+**Class Loader source** (bytecode):
+| Metric | Description |
+|--------|-------------|
+| `:bytecode-size` | Size in bytes of compiled class |
+
 Raw vs expanded: Threading macros like `->` appear flat in raw metrics but nested in expanded.
 
 ## Data Flow
 
 ```clojure
-;; analyze-ns output
-{:analyzed [{:name "my-fn"
-             :ns "my.namespace"
-             :file nil   ; hooks don't capture file path
-             :line 42
-             :metrics {:expressions-raw 12
-                       :expressions-expanded 28
-                       :max-depth-raw 2
-                       :max-depth-expanded 4}}]
- :asts []}  ; always empty (API compatibility)
+;; analyze-nses output
+{:result {:compiler [{:name "my-fn"
+                      :ns "my.namespace"
+                      :file nil   ; hooks don't capture file path
+                      :line 42
+                      :metrics {:expressions-raw 12
+                                :expressions-expanded 28
+                                :max-depth-raw 2
+                                :max-depth-expanded 4
+                                :unused? false}}]
+          :classloader [{:name "my_fn"
+                         :ns "my.namespace"
+                         :metrics {:bytecode-size 1234}}]}
+ :errors []}
 
 ;; build-hierarchy output (D3-compatible)
 {:name "root"
@@ -140,7 +152,7 @@ Learnings from migrating tools.analyzer.jvm to compiler hooks.
 
 - **Skip graceful degradation** - If a dependency (like the agent) is required, require it; optional loading adds complexity without proportional value
 - **Use direct imports once committed** - Reflection-based optional loading is a migration aid, not a permanent solution
-- **Extract shared logic early** - Functions like `process-captured-defs` and `add-unused-flags` prevent duplication between single-ns and multi-ns paths
+- **Extract shared logic early** - Functions like `process-captured-defs` and `add-unused-flags` keep the codebase DRY
 
 ### What to Avoid
 
