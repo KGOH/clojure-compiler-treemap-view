@@ -574,9 +574,14 @@ function showInfo(d) {
   const nodeData = d.data;
   // Compute full path for display
   let displayName;
-  if (nodeData.ns) {
+  if (nodeData["full-name"]) {
+    // Class loader data: use original class name
+    displayName = nodeData["full-name"];
+  } else if (nodeData.ns) {
+    // Compiler data: ns/name format
     displayName = `${nodeData.ns}/${nodeData.name}`;
   } else {
+    // Branch node: build path from ancestors
     const path = d.ancestors().reverse().slice(1).map(a => a.data.name);
     displayName = path.join('.');
   }

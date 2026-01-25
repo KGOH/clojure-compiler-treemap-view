@@ -224,22 +224,25 @@
 
 (defn- add-to-map-tree
   "Add a node to a nested map structure. O(1) per level.
-   Nodes can have both :metrics and :children (e.g. a function with closures)."
-  [tree path ns-str metrics]
+   Nodes can have both :metrics and :children (e.g. a function with closures).
+   node-data is a map with :ns, :metrics, and optionally :full-name."
+  [tree path node-data]
   (if (= 1 (count path))
-    ;; Add/merge metrics onto existing node (which may already have children)
-    (update tree (first path) merge {:ns ns-str :metrics metrics})
+    ;; Add/merge node-data onto existing node (which may already have children)
+    (update tree (first path) merge node-data)
     ;; Recurse into :children
-    (update-in tree [(first path) :children] (fnil add-to-map-tree {}) (rest path) ns-str metrics)))
+    (update-in tree [(first path) :children] (fnil add-to-map-tree {}) (rest path) node-data)))
 
 (defn- map-tree->d3-tree
   "Convert nested map structure to D3-compatible tree with :name and :children.
    Nodes can have both :metrics and :children."
   [name node]
   (cond-> {:name name}
-    (:metrics node) (assoc :ns (:ns node) :metrics (:metrics node))
-    (:children node) (assoc :children (mapv (fn [[k v]] (map-tree->d3-tree k v))
-                                            (:children node)))))
+    (:ns node)        (assoc :ns (:ns node))
+    (:full-name node) (assoc :full-name (:full-name node))
+    (:metrics node)   (assoc :metrics (:metrics node))
+    (:children node)  (assoc :children (mapv (fn [[k v]] (map-tree->d3-tree k v))
+                                             (:children node)))))
 
 (defn build-hierarchy
   "Build D3-compatible hierarchy from flat function data.
@@ -250,7 +253,7 @@
   (let [map-tree (reduce
                    (fn [tree {:keys [ns name metrics]}]
                      (let [path (conj (vec (ns->path ns)) name)]
-                       (add-to-map-tree tree path ns metrics)))
+                       (add-to-map-tree tree path {:ns ns :metrics metrics})))
                    {}
                    fn-data)]
     (map-tree->d3-tree "root" {:children map-tree})))
@@ -272,17 +275,17 @@
    Takes map of {class-name -> bytecode-size} and set of namespace
    prefixes to filter by (munged, e.g. \"foo_bar\" not \"foo-bar\").
 
-   Returns vector of maps with :name :ns :file :line :metrics"
+   Returns vector of maps with :name :ns :full-name :file :line :metrics"
   [classes ns-prefixes]
   (vec
     (for [[class-name bytecode-size] classes
           :let [path (class-name->path class-name)
-                ns-str (str/join "." (butlast path))
                 name (last path)]
           :when (or (nil? ns-prefixes)
                     (some #(str/starts-with? class-name %) ns-prefixes))]
       {:name name
-       :ns ns-str
+       :ns nil
+       :full-name class-name
        :file nil
        :line nil
        :metrics {:bytecode-size bytecode-size}})))
@@ -291,15 +294,13 @@
   "Build D3-compatible hierarchy from class data.
    Reuses add-to-map-tree and map-tree->d3-tree from build-hierarchy.
 
-   Input: seq of {:name \"fn__123\" :ns \"foo.bar.baz$quux\" :metrics {:bytecode-size 1234}}
+   Input: seq of {:name \"fn__123\" :full-name \"foo.bar$baz$fn__123\" :metrics {:bytecode-size 1234}}
    Output: {:name \"root\" :children [{:name \"foo\" :children [...]}]}"
   [class-data]
   (let [map-tree (reduce
-                   (fn [tree {:keys [ns name metrics]}]
-                     (let [path (if (str/blank? ns)
-                                  [name]
-                                  (conj (vec (str/split ns #"\.")) name))]
-                       (add-to-map-tree tree path ns metrics)))
+                   (fn [tree {:keys [name full-name metrics]}]
+                     (let [path (class-name->path full-name)]
+                       (add-to-map-tree tree path {:full-name full-name :metrics metrics})))
                    {}
                    class-data)]
     (map-tree->d3-tree "root" {:children map-tree})))
