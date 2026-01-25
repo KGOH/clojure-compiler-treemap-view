@@ -35,10 +35,12 @@
      (metric-line "clojure_unused" labels (if unused? 1 0))]))
 
 (defn- classloader-entry->lines [{:keys [name ns full-name metrics]}]
-  (let [labels {:ns ns :name name :full_name full-name}]
-    [(metric-line "clojure_bytecode_size" labels (:bytecode-size metrics))
-     (metric-line "clojure_field_count" labels (:field-count metrics))
-     (metric-line "clojure_instruction_count" labels (:instruction-count metrics))]))
+  (let [labels {:ns ns :name name :full_name full-name}
+        {:keys [bytecode-size field-count instruction-count unreferenced?]} metrics]
+    [(metric-line "clojure_bytecode_size" labels bytecode-size)
+     (metric-line "clojure_field_count" labels field-count)
+     (metric-line "clojure_instruction_count" labels instruction-count)
+     (metric-line "clojure_unreferenced" labels (if unreferenced? 1 0))]))
 
 (defn format-prometheus
   "Format metrics data as Prometheus exposition format string."
@@ -60,7 +62,9 @@
                             "# HELP clojure_field_count Number of fields in class"
                             "# TYPE clojure_field_count gauge"
                             "# HELP clojure_instruction_count Total JVM instructions in class"
-                            "# TYPE clojure_instruction_count gauge"]
+                            "# TYPE clojure_instruction_count gauge"
+                            "# HELP clojure_unreferenced 1 if class loaded but never referenced by other classes"
+                            "# TYPE clojure_unreferenced gauge"]
         classloader-lines (mapcat classloader-entry->lines (:classloader metrics-data))
         all-lines (concat header [""] compiler-header compiler-lines [""] classloader-header classloader-lines)]
     (str/join "\n" all-lines)))

@@ -87,6 +87,20 @@
   []
   (ClassLoadBridge/clear))
 
+(defn get-class-references
+  "Return map of class-name -> set of referenced class names.
+   Only includes classes that have outgoing references."
+  []
+  (into {}
+        (for [[class-name refs-set] (ClassLoadBridge/getClassReferences)]
+          [class-name (into #{} refs-set)])))
+
+(defn get-all-referenced-classes
+  "Return set of all class names that are referenced by at least one loaded class.
+   Useful for finding unreferenced classes (entry points)."
+  []
+  (into #{} (ClassLoadBridge/getAllReferencedClasses)))
+
 ;;; ==========================================================================
 ;;; Unused Var Detection (via compiler hooks)
 ;;; ==========================================================================

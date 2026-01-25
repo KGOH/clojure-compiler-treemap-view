@@ -2,6 +2,8 @@ package clojure.metrics;
 
 import java.lang.instrument.ClassFileTransformer;
 import java.security.ProtectionDomain;
+import java.util.HashSet;
+import java.util.Set;
 
 import net.bytebuddy.jar.asm.ClassReader;
 import net.bytebuddy.jar.asm.ClassVisitor;
@@ -29,8 +31,9 @@ public class ClassLoaderTransformer implements ClassFileTransformer {
                            ProtectionDomain protectionDomain,
                            byte[] classfileBuffer) {
         if (enabled && className != null && shouldCapture(className)) {
-            int[] metrics = collectMetrics(classfileBuffer);
-            ClassLoadBridge.capture(className, classfileBuffer.length, metrics[0], metrics[1]);
+            Set<String> referencedClasses = new HashSet<>();
+            int[] metrics = collectMetrics(classfileBuffer, referencedClasses);
+            ClassLoadBridge.capture(className, classfileBuffer.length, metrics[0], metrics[1], referencedClasses);
         }
         // Return null to indicate no transformation - just observing
         return null;
@@ -40,12 +43,13 @@ public class ClassLoaderTransformer implements ClassFileTransformer {
      * Collect all metrics in a single pass.
      *
      * @param bytecode Raw class file bytes
+     * @param referencedClasses Set to populate with referenced class names
      * @return int[2]: [fieldCount, instructionCount], or [-1, -1] on failure
      */
-    private int[] collectMetrics(byte[] bytecode) {
+    private int[] collectMetrics(byte[] bytecode, Set<String> referencedClasses) {
         try {
             ClassReader reader = new ClassReader(bytecode);
-            ClassMetricsVisitor visitor = new ClassMetricsVisitor();
+            ClassMetricsVisitor visitor = new ClassMetricsVisitor(referencedClasses);
             // SKIP_DEBUG is fine, but NOT SKIP_CODE - we need method bodies for instruction count
             reader.accept(visitor, ClassReader.SKIP_DEBUG);
             return new int[] { visitor.getFieldCount(), visitor.getInstructionCount() };
@@ -60,9 +64,25 @@ public class ClassLoaderTransformer implements ClassFileTransformer {
     private static class ClassMetricsVisitor extends ClassVisitor {
         private int fieldCount = 0;
         private int instructionCount = 0;
+        private final Set<String> referencedClasses;
 
-        ClassMetricsVisitor() {
+        ClassMetricsVisitor(Set<String> referencedClasses) {
             super(Opcodes.ASM9);
+            this.referencedClasses = referencedClasses;
+        }
+
+        @Override
+        public void visit(int version, int access, String name, String signature,
+                          String superName, String[] interfaces) {
+            // Track inheritance references
+            if (superName != null) {
+                referencedClasses.add(superName);
+            }
+            if (interfaces != null) {
+                for (String iface : interfaces) {
+                    referencedClasses.add(iface);
+                }
+            }
         }
 
         @Override
@@ -75,7 +95,7 @@ public class ClassLoaderTransformer implements ClassFileTransformer {
         @Override
         public MethodVisitor visitMethod(int access, String name, String descriptor,
                                          String signature, String[] exceptions) {
-            // Return a visitor that counts instructions
+            // Return a visitor that counts instructions and collects references
             return new InstructionCountingVisitor();
         }
 
@@ -88,7 +108,40 @@ public class ClassLoaderTransformer implements ClassFileTransformer {
         }
 
         /**
-         * MethodVisitor that counts all instructions.
+         * Extract element type from array type descriptor or return type directly.
+         * "[Ljava/lang/String;" -> "java/lang/String"
+         * "[[I" -> null (primitive array)
+         * "java/lang/String" -> "java/lang/String"
+         */
+        private static String extractElementType(String type) {
+            if (type == null || type.isEmpty()) {
+                return null;
+            }
+            // Strip leading [ for arrays
+            int arrayDepth = 0;
+            while (arrayDepth < type.length() && type.charAt(arrayDepth) == '[') {
+                arrayDepth++;
+            }
+            if (arrayDepth > 0) {
+                // It's an array type
+                if (arrayDepth >= type.length()) {
+                    return null;
+                }
+                char elementChar = type.charAt(arrayDepth);
+                if (elementChar == 'L') {
+                    // Object array: [Ljava/lang/String; -> java/lang/String
+                    return type.substring(arrayDepth + 1, type.length() - 1);
+                } else {
+                    // Primitive array
+                    return null;
+                }
+            }
+            // Not an array, return as-is
+            return type;
+        }
+
+        /**
+         * MethodVisitor that counts all instructions and collects class references.
          * Each visit*Insn method represents one JVM opcode.
          */
         private class InstructionCountingVisitor extends MethodVisitor {
@@ -115,17 +168,23 @@ public class ClassLoaderTransformer implements ClassFileTransformer {
             @Override
             public void visitTypeInsn(int opcode, String type) {
                 instructionCount++;
+                String elementType = extractElementType(type);
+                if (elementType != null) {
+                    referencedClasses.add(elementType);
+                }
             }
 
             @Override
             public void visitFieldInsn(int opcode, String owner, String name, String descriptor) {
                 instructionCount++;
+                referencedClasses.add(owner);
             }
 
             @Override
             public void visitMethodInsn(int opcode, String owner, String name,
                                         String descriptor, boolean isInterface) {
                 instructionCount++;
+                referencedClasses.add(owner);
             }
 
             @Override

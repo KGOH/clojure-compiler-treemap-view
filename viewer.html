@@ -224,7 +224,8 @@ const sourceConfigs = {
     metrics: [
       { key: 'bytecode-size', label: 'Bytecode Size (bytes)' },
       { key: 'field-count', label: 'Field Count (closed-overs)' },
-      { key: 'instruction-count', label: 'Instruction Count' }
+      { key: 'instruction-count', label: 'Instruction Count' },
+      { key: 'unreferenced?', label: 'Unreferenced' }
     ],
     defaultSize: 'bytecode-size',
     defaultColor: 'instruction-count'
@@ -1048,7 +1049,7 @@ function parsePrometheus(text) {
     const labels = parseLabels(labelStr);
     const value = parseFloat(valueStr);
 
-    if (metricName === 'clojure_bytecode_size' || metricName === 'clojure_field_count' || metricName === 'clojure_instruction_count') {
+    if (metricName === 'clojure_bytecode_size' || metricName === 'clojure_field_count' || metricName === 'clojure_instruction_count' || metricName === 'clojure_unreferenced') {
       const key = labels.full_name || `${labels.ns}|${labels.name}`;
       if (!classloader.has(key)) {
         classloader.set(key, {
@@ -1059,9 +1060,11 @@ function parsePrometheus(text) {
       const metricKeyMap = {
         'clojure_bytecode_size': 'bytecode-size',
         'clojure_field_count': 'field-count',
-        'clojure_instruction_count': 'instruction-count'
+        'clojure_instruction_count': 'instruction-count',
+        'clojure_unreferenced': 'unreferenced?'
       };
-      classloader.get(key).metrics[metricKeyMap[metricName]] = value;
+      const jsonKey = metricKeyMap[metricName];
+      classloader.get(key).metrics[jsonKey] = jsonKey === 'unreferenced?' ? value === 1 : value;
     } else if (metricName.startsWith('clojure_')) {
       const key = `${labels.ns}|${labels.name}|${labels.line}`;
       if (!compiler.has(key)) {

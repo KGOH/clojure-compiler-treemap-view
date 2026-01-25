@@ -1,7 +1,9 @@
 package clojure.metrics;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -30,14 +32,23 @@ public class ClassLoadBridge {
         new ConcurrentHashMap<>();
 
     /**
+     * Map of class name (dotted format) to set of referenced class names.
+     * Tracks outgoing references (method calls, field access, type instructions, inheritance).
+     */
+    private static final ConcurrentHashMap<String, Set<String>> CLASS_REFERENCES =
+        new ConcurrentHashMap<>();
+
+    /**
      * Capture a loaded class with metrics. Called by ClassLoaderTransformer.
      *
      * @param className Internal class name format (com/foo/Bar)
      * @param bytecodeSize Size of class bytecode in bytes
      * @param fieldCount Number of fields in the class (-1 if unknown)
      * @param instructionCount Total JVM instructions in the class (-1 if unknown)
+     * @param referencedClasses Set of class names referenced by this class (internal format)
      */
-    public static void capture(String className, int bytecodeSize, int fieldCount, int instructionCount) {
+    public static void capture(String className, int bytecodeSize, int fieldCount, int instructionCount,
+                               Set<String> referencedClasses) {
         // Convert internal name (com/foo/Bar) to dotted (com.foo.Bar)
         String normalizedName = className.replace('/', '.');
         int[] metrics = new int[METRICS_LENGTH];
@@ -45,6 +56,20 @@ public class ClassLoadBridge {
         metrics[IDX_FIELD_COUNT] = fieldCount;
         metrics[IDX_INSTRUCTION_COUNT] = instructionCount;
         LOADED_CLASSES.put(normalizedName, metrics);
+
+        // Store outgoing references (excluding self)
+        if (referencedClasses != null && !referencedClasses.isEmpty()) {
+            Set<String> normalized = new HashSet<>();
+            for (String ref : referencedClasses) {
+                String normRef = ref.replace('/', '.');
+                if (!normRef.equals(normalizedName)) {
+                    normalized.add(normRef);
+                }
+            }
+            if (!normalized.isEmpty()) {
+                CLASS_REFERENCES.put(normalizedName, normalized);
+            }
+        }
     }
 
     /**
@@ -73,10 +98,37 @@ public class ClassLoadBridge {
     }
 
     /**
-     * Clear all captured classes.
+     * Clear all captured classes and references.
      */
     public static void clear() {
         LOADED_CLASSES.clear();
+        CLASS_REFERENCES.clear();
+    }
+
+    /**
+     * Get a copy of all class references.
+     *
+     * @return Map of class name to set of referenced class names (dotted format)
+     */
+    public static Map<String, Set<String>> getClassReferences() {
+        Map<String, Set<String>> copy = new HashMap<>();
+        for (Map.Entry<String, Set<String>> entry : CLASS_REFERENCES.entrySet()) {
+            copy.put(entry.getKey(), new HashSet<>(entry.getValue()));
+        }
+        return copy;
+    }
+
+    /**
+     * Get the union of all referenced classes.
+     *
+     * @return Set of all class names that are referenced by at least one loaded class
+     */
+    public static Set<String> getAllReferencedClasses() {
+        Set<String> allRefs = new HashSet<>();
+        for (Set<String> refs : CLASS_REFERENCES.values()) {
+            allRefs.addAll(refs);
+        }
+        return allRefs;
     }
 
     /**

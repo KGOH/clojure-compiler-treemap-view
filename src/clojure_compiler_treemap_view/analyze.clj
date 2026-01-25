@@ -223,6 +223,16 @@
   [class-name]
   (str/split class-name #"[.$]"))
 
+(defn- add-class-unreferenced-flags
+  "Add :unreferenced? flag to each class-data based on all-referenced-classes set.
+   A class is unreferenced if no other loaded class references it."
+  [class-data-seq]
+  (let [all-referenced (agent/get-all-referenced-classes)]
+    (mapv (fn [class-data]
+            (let [unreferenced? (not (contains? all-referenced (:full-name class-data)))]
+              (assoc-in class-data [:metrics :unreferenced?] unreferenced?)))
+          class-data-seq)))
+
 (defn- process-loaded-classes
   "Transform loaded classes into fn-data format for hierarchy building.
 
@@ -231,17 +241,18 @@
 
    Returns vector of maps with :name :ns :full-name :file :line :metrics"
   [classes ns-prefixes]
-  (vec
-    (for [[class-name {:keys [bytecode-size field-count instruction-count]}] classes
-          :let [path (class-name->path class-name)
-                name (last path)]
-          :when (or (nil? ns-prefixes)
-                    (some #(str/starts-with? class-name %) ns-prefixes))]
-      {:name name
-       :ns nil
-       :full-name class-name
-       :file nil
-       :line nil
-       :metrics {:bytecode-size bytecode-size
-                 :field-count field-count
-                 :instruction-count instruction-count}})))
+  (-> (vec
+        (for [[class-name {:keys [bytecode-size field-count instruction-count]}] classes
+              :let [path (class-name->path class-name)
+                    name (last path)]
+              :when (or (nil? ns-prefixes)
+                        (some #(str/starts-with? class-name %) ns-prefixes))]
+          {:name name
+           :ns nil
+           :full-name class-name
+           :file nil
+           :line nil
+           :metrics {:bytecode-size bytecode-size
+                     :field-count field-count
+                     :instruction-count instruction-count}}))
+      add-class-unreferenced-flags))
