@@ -53,32 +53,19 @@
 ;; ============================================================================
 
 (defmacro with-capture
-  "Clear capture buffers, execute body, then drain captured defs.
-   Options (as leading keyword-value pairs before body):
-     :include-var-refs? - Also clear var reference tracking (default: false)
-     :include-classes?  - Also clear class loader tracking (default: false)
+  "Clear all capture buffers, execute body, then drain captured defs.
    Binds `captured` to the result of get-captured-defs in body's scope.
 
    WARNING: Not thread-safe. Uses global buffers shared across all threads.
    Concurrent calls will corrupt each other's data."
-  {:arglists '([& body] [:include-var-refs? bool :include-classes? bool & body])}
-  [& args]
-  (let [[opts body] (loop [opts {} remaining args]
-                      (if (keyword? (first remaining))
-                        (recur (assoc opts (first remaining) (second remaining))
-                               (drop 2 remaining))
-                        [opts remaining]))
-        include-var-refs? (:include-var-refs? opts)
-        include-classes? (:include-classes? opts)]
-    `(do
-       (agent/clear!)
-       ~(when include-var-refs?
-          `(agent/clear-var-references!))
-       ~(when include-classes?
-          `(agent/clear-loaded-classes!))
-       ~@(butlast body)
-       (let [~'captured (agent/get-captured-defs)]
-         ~(last body)))))
+  [& body]
+  `(do
+     (agent/clear!)
+     (agent/clear-var-references!)
+     (agent/clear-loaded-classes!)
+     ~@(butlast body)
+     (let [~'captured (agent/get-captured-defs)]
+       ~(last body))))
 
 ;; ============================================================================
 ;; S-Expression Counters
@@ -215,7 +202,7 @@
   [ns-sym]
   (with-error-tracking
     (try
-      (with-capture :include-classes? true
+      (with-capture
         (require ns-sym :reload)
         (let [ns-str (str ns-sym)
               compiler-data (process-captured-defs captured #{ns-str})
@@ -243,7 +230,7 @@
    WARNING: Not thread-safe. Do not call concurrently from multiple threads."
   [ns-syms]
   (with-error-tracking
-    (with-capture :include-var-refs? true :include-classes? true
+    (with-capture
       (doseq [ns-sym ns-syms]
         (try
           (require ns-sym :reload)
