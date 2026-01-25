@@ -77,16 +77,6 @@
   []
   (into {} (ClassLoadBridge/getLoadedClasses)))
 
-(defn loaded-class-count
-  "Return the number of captured classes."
-  []
-  (ClassLoadBridge/classCount))
-
-(defn total-bytecode-size
-  "Return total bytecode size of all captured classes in bytes."
-  []
-  (ClassLoadBridge/totalBytecodeSize))
-
 (defn clear-loaded-classes!
   "Clear all captured class data."
   []
