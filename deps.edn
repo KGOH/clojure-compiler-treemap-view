@@ -17,5 +17,5 @@
   {:main-opts
    ["-e"
     "(do (require '[clojure-compiler-treemap-view.core :as cctv])
-         (cctv/export-captured-metrics \"metrics.json\"))"]}}}
+         (cctv/write-metrics (:result (cctv/analyze-captured)) \"metrics.json\"))"]}}}
 

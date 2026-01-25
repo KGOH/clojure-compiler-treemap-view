@@ -1,7 +1,6 @@
 {
   "version" : 1,
-  "generated" : "2026-01-25T15:03:49.063084Z",
-  "namespaces" : [ "clojure-compiler-treemap-view" ],
+  "generated" : "2026-01-25T15:31:24.773959Z",
   "compiler" : [ {
     "name" : "java-collection-module",
     "ns" : "jsonista.core",
@@ -147,6 +146,18 @@
       "unused?" : false
     }
   }, {
+    "name" : "analyze-captured",
+    "ns" : "clojure-compiler-treemap-view.core",
+    "file" : null,
+    "line" : 11,
+    "metrics" : {
+      "expressions-raw" : 5,
+      "expressions-expanded" : 5,
+      "max-depth-raw" : 1,
+      "max-depth-expanded" : 1,
+      "unused?" : false
+    }
+  }, {
     "name" : "agent-loaded?",
     "ns" : "clojure-compiler-treemap-view.require-agent",
     "file" : null,
@@ -229,6 +240,18 @@
       "max-depth-raw" : 6,
       "max-depth-expanded" : 8,
       "unused?" : false
+    }
+  }, {
+    "name" : "analyze-nses",
+    "ns" : "clojure-compiler-treemap-view.core",
+    "file" : null,
+    "line" : 6,
+    "metrics" : {
+      "expressions-raw" : 5,
+      "expressions-expanded" : 5,
+      "max-depth-raw" : 1,
+      "max-depth-expanded" : 1,
+      "unused?" : true
     }
   }, {
     "name" : "wrap-values",
@@ -351,25 +374,13 @@
       "unused?" : false
     }
   }, {
-    "name" : "export-captured-metrics",
-    "ns" : "clojure-compiler-treemap-view.core",
-    "file" : null,
-    "line" : 43,
-    "metrics" : {
-      "expressions-raw" : 26,
-      "expressions-expanded" : 28,
-      "max-depth-raw" : 5,
-      "max-depth-expanded" : 7,
-      "unused?" : false
-    }
-  }, {
     "name" : "write-metrics",
     "ns" : "clojure-compiler-treemap-view.core",
     "file" : null,
-    "line" : 9,
+    "line" : 16,
     "metrics" : {
-      "expressions-raw" : 41,
-      "expressions-expanded" : 43,
+      "expressions-raw" : 45,
+      "expressions-expanded" : 47,
       "max-depth-raw" : 6,
       "max-depth-expanded" : 8,
       "unused?" : false
@@ -519,18 +530,6 @@
       "unused?" : false
     }
   }, {
-    "name" : "pretty-mapper",
-    "ns" : "clojure-compiler-treemap-view.core",
-    "file" : null,
-    "line" : 6,
-    "metrics" : {
-      "expressions-raw" : 8,
-      "expressions-expanded" : 8,
-      "max-depth-raw" : 3,
-      "max-depth-expanded" : 3,
-      "unused?" : false
-    }
-  }, {
     "name" : "read-value",
     "ns" : "jsonista.core",
     "file" : null,
@@ -540,18 +539,6 @@
       "expressions-expanded" : 20,
       "max-depth-raw" : 3,
       "max-depth-expanded" : 4,
-      "unused?" : true
-    }
-  }, {
-    "name" : "export-metrics",
-    "ns" : "clojure-compiler-treemap-view.core",
-    "file" : null,
-    "line" : 26,
-    "metrics" : {
-      "expressions-raw" : 27,
-      "expressions-expanded" : 29,
-      "max-depth-raw" : 5,
-      "max-depth-expanded" : 7,
       "unused?" : true
     }
   }, {
@@ -2563,6 +2550,15 @@
       "bytecode-size" : 3402
     }
   }, {
+    "name" : "eval691",
+    "ns" : null,
+    "full-name" : "user$eval691",
+    "file" : null,
+    "line" : null,
+    "metrics" : {
+      "bytecode-size" : 1632
+    }
+  }, {
     "name" : "fn__11594",
     "ns" : null,
     "full-name" : "clojure.java.io$fn__11594",
@@ -4064,15 +4060,6 @@
     "line" : null,
     "metrics" : {
       "bytecode-size" : 3285
-    }
-  }, {
-    "name" : "export_captured_metrics",
-    "ns" : null,
-    "full-name" : "clojure_compiler_treemap_view.core$export_captured_metrics",
-    "file" : null,
-    "line" : null,
-    "metrics" : {
-      "bytecode-size" : 2633
     }
   }, {
     "name" : "vswap_BANG_",
@@ -6035,15 +6022,6 @@
     "line" : null,
     "metrics" : {
       "bytecode-size" : 2150
-    }
-  }, {
-    "name" : "export_metrics",
-    "ns" : null,
-    "full-name" : "clojure_compiler_treemap_view.core$export_metrics",
-    "file" : null,
-    "line" : null,
-    "metrics" : {
-      "bytecode-size" : 2611
     }
   }, {
     "name" : "MethodKind",
@@ -15475,7 +15453,7 @@
     "file" : null,
     "line" : null,
     "metrics" : {
-      "bytecode-size" : 3013
+      "bytecode-size" : 3179
     }
   }, {
     "name" : "RootNameLookup",
@@ -22442,15 +22420,6 @@
     "line" : null,
     "metrics" : {
       "bytecode-size" : 8226
-    }
-  }, {
-    "name" : "eval695",
-    "ns" : null,
-    "full-name" : "user$eval695",
-    "file" : null,
-    "line" : null,
-    "metrics" : {
-      "bytecode-size" : 1247
     }
   }, {
     "name" : "fn__2626",

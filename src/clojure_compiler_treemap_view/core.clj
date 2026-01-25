@@ -3,54 +3,42 @@
   (:require [clojure-compiler-treemap-view.analyze :as cctv.analyze]
             [jsonista.core :as json]))
 
-(def ^:private pretty-mapper
-  (json/object-mapper {:pretty true}))
+(def analyze-nses
+  "Analyze namespaces by reloading them with the agent active.
+   Returns {:result {:compiler [...] :classloader [...]} :errors [...]}."
+  cctv.analyze/analyze-nses)
+
+(def analyze-captured
+  "Analyze already-captured forms from the agent buffer.
+   Returns {:result {:compiler [...] :classloader [...]} :errors [...]}."
+  cctv.analyze/analyze-captured)
 
 (defn write-metrics
   "Write metrics data to a JSON file.
 
    metrics-data should be a map with :compiler and :classloader keys.
-   ns-syms is a list of namespace symbols for metadata.
    path is the output file path.
 
-   Returns the path written."
-  [metrics-data ns-syms path]
-  (let [output {:version 1
-                :generated (.toString (java.time.Instant/now))
-                :namespaces (mapv str ns-syms)
-                :compiler (:compiler metrics-data)
-                :classloader (:classloader metrics-data)}]
-    (spit path (json/write-value-as-string output pretty-mapper))
-    path))
-
-(defn export-metrics
-  "Export metrics to a JSON file.
-
-   Analyzes the given namespaces and writes the results to path.
-   The JSON file can be loaded into the treemap viewer via:
-   - File upload in the viewer UI
-   - ?data=URL query param
-   - Placing metrics.json alongside viewer.html
-
-   Returns {:file \"path\" :errors [...]}.
-
-   WARNING: Not thread-safe. Do not call concurrently from multiple threads."
-  [ns-syms path]
-  (let [{:keys [result errors]} (cctv.analyze/analyze-nses ns-syms)]
-    {:file (write-metrics result ns-syms path)
-     :errors errors}))
-
-(defn export-captured-metrics
-  "Export metrics from already-captured forms to a JSON file.
-
-   Use this after loading namespaces with the agent active.
-   Returns {:file \"path\" :errors [...]}."
-  [ns-syms path]
-  (let [{:keys [result errors]} (cctv.analyze/analyze-captured)]
-    {:file (write-metrics result ns-syms path)
-     :errors errors}))
-
+   Returns the absolute path written."
+  [metrics-data path]
+  (let [output {:version     1
+                :generated   (.toString (java.time.Instant/now))
+                :compiler    (:compiler metrics-data)
+                :classloader (:classloader metrics-data)}
+        file (.getAbsolutePath (java.io.File. path))]
+    (spit file (json/write-value-as-string output (json/object-mapper {:pretty true})))
+    file))
 
 (comment
-  (export-metrics '[clojure-compiler-treemap-view.analyze] "metrics.json")
+  ;; Using captured forms (after loading with agent)
+  (def analyzed (analyze-captured))
+  (def metrics-path (write-metrics (:result analyzed) "metrics.json"))
+
+  ;; Using analyze-nses (reloads namespaces)
+  (def analyzed (analyze-nses (->> (all-ns) (map ns-name))))
+  (def metrics-path (write-metrics (:result analyzed) "metrics.json"))
+
+  ;; Open in browser
+  (clojure.java.browse/browse-url (str "file://" (.getAbsolutePath (java.io.File. "viewer.html")) "?data=file://" metrics-path))
+
   ,)
