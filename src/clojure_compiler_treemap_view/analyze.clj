@@ -171,7 +171,7 @@
         ns-prefixes (when ns-syms
                       (set (map #(str/replace (str %) "-" "_") ns-syms)))
         classes (agent/get-loaded-classes)
-        class-data (process-loaded-classes classes ns-prefixes)]
+        class-data (process-loaded-classes classes ns-prefixes compiler-data)]
     {:result {:compiler compiler-data
               :classloader class-data}
      :errors []}))
@@ -208,7 +208,7 @@
             ;; Class loader data (munge ns names: foo-bar -> foo_bar)
             ns-prefixes (set (map #(str/replace (str %) "-" "_") ns-syms))
             classes (agent/get-loaded-classes)
-            class-data (process-loaded-classes classes ns-prefixes)]
+            class-data (process-loaded-classes classes ns-prefixes compiler-data)]
         {:compiler compiler-data
          :classloader class-data}))))
 
@@ -223,24 +223,64 @@
   [class-name]
   (str/split class-name #"[.$]"))
 
+(defn- generated-class-suffix?
+  "Check if the suffix (part after last $) indicates a generated/anonymous class."
+  [suffix]
+  (boolean
+    (or (re-matches #"fn__\d+" suffix)
+        (re-matches #"iter__\d+__\d+" suffix)
+        (re-matches #"eval\d+" suffix)
+        (re-matches #"loading__\d+__auto____\d+" suffix)
+        (re-matches #".*__\d+$" suffix))))
+
+(defn- top-level-clojure-fn?
+  "Check if class name represents a top-level Clojure function (not anonymous/generated)."
+  [class-name]
+  (when-let [dollar-idx (str/index-of class-name "$")]
+    (let [suffix (subs class-name (inc dollar-idx))]
+      (and (not (str/includes? suffix "$"))  ; no nested classes
+           (not (generated-class-suffix? suffix))))))
+
+(defn- class-name->var-name
+  "Convert top-level Clojure class name to qualified var name.
+   foo_bar.baz$quux_BANG_ -> foo-bar.baz/quux!
+   Uses Clojure's built-in demunge which handles $ -> / conversion."
+  [class-name]
+  (clojure.lang.Compiler/demunge class-name))
+
 (defn- add-class-unreferenced-flags
-  "Add :unreferenced? flag to each class-data based on all-referenced-classes set.
-   A class is unreferenced if no other loaded class references it."
-  [class-data-seq]
-  (let [all-referenced (agent/get-all-referenced-classes)]
+  "Add :unreferenced? flag to each class-data.
+
+   For top-level Clojure functions: use compiler's unused? flag (var reference tracking).
+   For anonymous/generated classes: use bytecode reference tracking.
+   For non-Clojure classes: use bytecode reference tracking."
+  [class-data-seq compiler-data]
+  (let [all-referenced (agent/get-all-referenced-classes)
+        ;; Build lookup from var name to unused? status
+        unused-lookup (into {}
+                        (for [{:keys [ns name metrics]} compiler-data]
+                          [(str ns "/" name) (:unused? metrics)]))]
     (mapv (fn [class-data]
-            (let [unreferenced? (not (contains? all-referenced (:full-name class-data)))]
+            (let [full-name (:full-name class-data)
+                  unreferenced?
+                  (if (top-level-clojure-fn? full-name)
+                    ;; Top-level Clojure fn: use compiler's unused tracking
+                    (let [var-name (class-name->var-name full-name)]
+                      (get unused-lookup var-name false))
+                    ;; Anonymous/generated or non-Clojure: use bytecode refs
+                    (not (contains? all-referenced full-name)))]
               (assoc-in class-data [:metrics :unreferenced?] unreferenced?)))
           class-data-seq)))
 
 (defn- process-loaded-classes
   "Transform loaded classes into fn-data format for hierarchy building.
 
-   Takes map of {class-name -> {:bytecode-size n :field-count n :instruction-count n}}
-   and set of namespace prefixes to filter by (munged, e.g. \"foo_bar\" not \"foo-bar\").
+   Takes map of {class-name -> {:bytecode-size n :field-count n :instruction-count n}},
+   set of namespace prefixes to filter by (munged, e.g. \"foo_bar\" not \"foo-bar\"),
+   and compiler-data for cross-referencing unused vars.
 
    Returns vector of maps with :name :ns :full-name :file :line :metrics"
-  [classes ns-prefixes]
+  [classes ns-prefixes compiler-data]
   (-> (vec
         (for [[class-name {:keys [bytecode-size field-count instruction-count]}] classes
               :let [path (class-name->path class-name)
@@ -255,4 +295,4 @@
            :metrics {:bytecode-size bytecode-size
                      :field-count field-count
                      :instruction-count instruction-count}}))
-      add-class-unreferenced-flags))
+      (add-class-unreferenced-flags compiler-data)))
