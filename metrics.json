@@ -1,6 +1,6 @@
 {
   "version" : 1,
-  "generated" : "2026-01-25T15:39:28.187010Z",
+  "generated" : "2026-01-25T15:40:57.769489552Z",
   "compiler" : [ {
     "name" : "java-collection-module",
     "ns" : "jsonista.core",
