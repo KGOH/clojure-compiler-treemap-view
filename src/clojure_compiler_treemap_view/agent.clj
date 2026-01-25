@@ -71,11 +71,15 @@
 ;;; ==========================================================================
 
 (defn get-loaded-classes
-  "Return map of class-name -> bytecode-size for all captured classes.
+  "Return map of class-name -> {:bytecode-size n :field-count n} for all captured classes.
 
+   Field count may be -1 if parsing failed for a class.
    Only includes classes that passed the filter (excludes JDK classes)."
   []
-  (into {} (ClassLoadBridge/getLoadedClasses)))
+  (into {}
+        (for [[class-name metrics-arr] (ClassLoadBridge/getLoadedClasses)]
+          [class-name {:bytecode-size (aget metrics-arr ClassLoadBridge/IDX_BYTECODE_SIZE)
+                       :field-count (aget metrics-arr ClassLoadBridge/IDX_FIELD_COUNT)}])))
 
 (defn clear-loaded-classes!
   "Clear all captured class data."

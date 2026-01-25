@@ -7,39 +7,49 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Bridge between the ClassLoaderTransformer and Clojure code.
  *
- * Stores class names and their bytecode sizes in a thread-safe map.
+ * Stores class names and their metrics in a thread-safe map.
  *
  * Usage from Clojure:
  *   (import '[clojure.metrics ClassLoadBridge])
- *   (ClassLoadBridge/getLoadedClasses)  ; returns map of class-name -> size
+ *   (ClassLoadBridge/getLoadedClasses)  ; returns map of class-name -> int[]
  *   (ClassLoadBridge/totalBytecodeSize) ; returns total bytes
  */
 public class ClassLoadBridge {
 
+    // Metrics array indices
+    public static final int IDX_BYTECODE_SIZE = 0;
+    public static final int IDX_FIELD_COUNT = 1;
+    public static final int METRICS_LENGTH = 2;
+
     /**
-     * Map of class name (dotted format) to bytecode size in bytes.
+     * Map of class name (dotted format) to metrics array.
+     * Index 0 = bytecode size, Index 1 = field count
      */
-    private static final ConcurrentHashMap<String, Integer> LOADED_CLASSES =
+    private static final ConcurrentHashMap<String, int[]> LOADED_CLASSES =
         new ConcurrentHashMap<>();
 
     /**
-     * Capture a loaded class. Called by ClassLoaderTransformer.
+     * Capture a loaded class with metrics. Called by ClassLoaderTransformer.
      *
      * @param className Internal class name format (com/foo/Bar)
      * @param bytecodeSize Size of class bytecode in bytes
+     * @param fieldCount Number of fields in the class (-1 if unknown)
      */
-    public static void capture(String className, int bytecodeSize) {
+    public static void capture(String className, int bytecodeSize, int fieldCount) {
         // Convert internal name (com/foo/Bar) to dotted (com.foo.Bar)
         String normalizedName = className.replace('/', '.');
-        LOADED_CLASSES.put(normalizedName, bytecodeSize);
+        int[] metrics = new int[METRICS_LENGTH];
+        metrics[IDX_BYTECODE_SIZE] = bytecodeSize;
+        metrics[IDX_FIELD_COUNT] = fieldCount;
+        LOADED_CLASSES.put(normalizedName, metrics);
     }
 
     /**
-     * Get a copy of all loaded classes.
+     * Get a copy of all loaded classes with metrics.
      *
-     * @return Map of class name to bytecode size
+     * @return Map of class name to metrics array [bytecodeSize, fieldCount]
      */
-    public static Map<String, Integer> getLoadedClasses() {
+    public static Map<String, int[]> getLoadedClasses() {
         return new HashMap<>(LOADED_CLASSES);
     }
 
@@ -55,7 +65,7 @@ public class ClassLoadBridge {
      */
     public static long totalBytecodeSize() {
         return LOADED_CLASSES.values().stream()
-            .mapToLong(Integer::longValue)
+            .mapToLong(m -> m[IDX_BYTECODE_SIZE])
             .sum();
     }
 
@@ -73,7 +83,18 @@ public class ClassLoadBridge {
      * @return Bytecode size or -1 if not found
      */
     public static int getBytecodeSize(String className) {
-        Integer size = LOADED_CLASSES.get(className);
-        return size != null ? size : -1;
+        int[] metrics = LOADED_CLASSES.get(className);
+        return metrics != null ? metrics[IDX_BYTECODE_SIZE] : -1;
+    }
+
+    /**
+     * Get field count for a specific class.
+     *
+     * @param className Dotted class name (com.foo.Bar)
+     * @return Field count or -1 if not found/unknown
+     */
+    public static int getFieldCount(String className) {
+        int[] metrics = LOADED_CLASSES.get(className);
+        return metrics != null ? metrics[IDX_FIELD_COUNT] : -1;
     }
 }
