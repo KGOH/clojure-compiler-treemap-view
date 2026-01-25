@@ -66,6 +66,6 @@
     (let [{:keys [result]} (cctv.analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha])
           content (core/render-html result)]
       (is (str/includes? content "<!DOCTYPE html"))
-      (is (str/includes? content "d3.v7.min.js"))
+      (is (str/includes? content "d3js.org"))  ; D3 is embedded inline
       (is (str/includes? content "treemap"))
-      (is (str/includes? content "const sources =")))))
+      (is (str/includes? content "TREEMAP_DATA")))))
