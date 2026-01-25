@@ -50,37 +50,19 @@ The agent must be loaded at JVM startup. Without it, all analysis functions will
 ```clojure
 (require '[clojure-compiler-treemap-view.core :as cctv])
 
-;; Analyze namespaces and open visualization in browser
-(cctv/treemap! '[my.app.core my.app.handlers])
+;; Analyze namespaces and write metrics
+(def analysis (cctv/analyze-nses '[my.app.core my.app.handlers]))
+(cctv/write-metrics (:result analysis) "metrics.prom")
 
-;; Analyze all loaded namespaces matching a prefix
-(require '[clojure.string :as str])
-(cctv/treemap! (->> (all-ns)
-                    (map ns-name)
-                    (filter #(str/starts-with? (str %) "my.app."))))
+;; Open viewer in browser (viewer.html loads the .prom file)
+(clojure.java.browse/browse-url
+  (str "file://" (.getAbsolutePath (java.io.File. "viewer.html"))
+       "?data=file://" (.getAbsolutePath (java.io.File. "metrics.prom"))))
 ```
-
-### Programmatic Use
-
-```clojure
-(require '[clojure-compiler-treemap-view.analyze :as cctv.analyze])
-
-;; Get raw analysis data
-(def analysis (cctv.analyze/analyze-nses '[my.namespace]))
-;; => {:result [...] :errors [...]}
-
-;; Build D3-compatible hierarchy
-(def tree (cctv.analyze/build-hierarchy (:result analysis)))
-
-;; Render to HTML string (no browser)
-(def html (cctv/render-html tree :size :expressions-raw :color :max-depth-raw))
-```
-
-Analysis functions return `{:result [...] :errors [...]}`. Check `:errors` for namespaces that failed to load.
 
 ### Discovering What You Actually Loaded
 
-`treemap!` and `analyze-nses` require you to name namespaces upfront. But when you `require` code, the agent captures everything that compiles—including transitive dependencies you might not realize you're pulling in.
+`analyze-nses` requires you to name namespaces upfront. But when you `require` code, the agent captures everything that compiles, including transitive dependencies you might not realize you're pulling in.
 
 Use `analyze-captured` to see what's actually been compiled during your session:
 
@@ -90,16 +72,15 @@ Use `analyze-captured` to see what's actually been compiled during your session:
 (some.library/do-stuff)
 
 ;; Then see everything that compiled
-(let [{:keys [result]} (cctv.analyze/analyze-captured)
-      tree (cctv.analyze/build-hierarchy result)]
-  (cctv/open-html (cctv/render-html tree)))
+(def analysis (cctv/analyze-captured))
+(cctv/write-metrics (:result analysis) "metrics.prom")
 ```
 
-This reveals the true cost of dependencies. A "simple" library that pulls in 50 helper namespaces? You'll see it on the treemap.
+This reveals the true cost of dependencies. A "simple" library that pulls in 50 helper namespaces? You'll see it in the metrics.
 
 ### Buffer Drainage
 
-All analysis functions (`treemap!`, `analyze-nses`, `analyze-captured`) drain the capture buffer. After calling any of these, the buffer is empty until more code compiles. This means subsequent calls return empty results unless you've loaded more code. Store the result if you need it later. This design exists because there's only one Clojure compiler per JVM—the global buffer prevents stale data from previous analyses, ensuring each analysis reflects a clean capture of what actually compiled.
+All analysis functions (`analyze-nses`, `analyze-captured`) drain the capture buffer. After calling any of these, the buffer is empty until more code compiles. This means subsequent calls return empty results unless you've loaded more code. Store the result if you need it later. This design exists because there's only one Clojure compiler per JVM, and the global buffer prevents stale data from previous analyses.
 
 ## Available Metrics
 
@@ -124,11 +105,13 @@ All analysis functions (`treemap!`, `analyze-nses`, `analyze-captured`) drain th
 1. **Capture** - Java agent hooks into the Clojure compiler to capture def forms before and after macro expansion
 2. **Track References** - Agent captures var references during compilation for unused detection
 3. **Extract Metrics** - Walks each captured form to compute expression counts and nesting depth
-4. **Build Hierarchy** - Converts flat function list to nested tree structure for D3
-5. **Render** - Injects data as JSON into HTML template with vendored D3.js, opens in browser
+4. **Export** - Writes metrics in Prometheus format (zero dependencies)
+5. **Visualize** - Static `viewer.html` loads the metrics file and renders with D3.js
 
 ## Dependencies
 
-- [jsonista](https://github.com/metosin/jsonista) - JSON serialization
-- [D3.js](https://d3js.org/) - Treemap visualization (vendored locally)
-- Java metrics agent - Compiler instrumentation (in `metrics-agent/` directory)
+**Runtime**: Only `org.clojure/clojure` - zero third-party dependencies.
+
+**Viewer**: D3.js is inlined in `viewer.html` for browser visualization. This is a static file, not a runtime dependency of the Clojure library.
+
+**Build-time**: Java metrics agent (in `metrics-agent/` directory) must be loaded via `-javaagent` flag.

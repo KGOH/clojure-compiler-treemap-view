@@ -11,24 +11,26 @@ clj -M:agent
 
 ```clojure
 (require '[clojure-compiler-treemap-view.core :as cctv])
-(cctv/treemap! '[my.namespace])           ; opens browser with compiler source
-(cctv/treemap! '[ns1 ns2] :source :classloader)  ; show bytecode metrics
+(def analysis (cctv/analyze-nses '[my.namespace]))
+(cctv/write-metrics (:result analysis) "metrics.prom")
+;; Open viewer.html?data=file:///path/to/metrics.prom in browser
 ```
 
 ## Architecture
 
 ```
-analyze-nses -> build-hierarchy -> render-html -> open-html
-      |               |                 |
- capture all      flat->tree      inject into template
- (defs+classes)
+analyze-nses -> write-metrics -> viewer.html
+      |               |               |
+ capture all    Prometheus      D3.js treemap
+ (defs+classes)   format        (loads .prom)
 ```
 
 **Core files**:
 - `src/clojure_compiler_treemap_view/agent.clj` - Java agent wrapper, compiler hook interface
 - `src/clojure_compiler_treemap_view/analyze.clj` - Metrics extraction from captured forms
-- `src/clojure_compiler_treemap_view/core.clj` - HTML generation, public API
-- `resources/treemap.{html,css,js}` - D3.js visualization
+- `src/clojure_compiler_treemap_view/core.clj` - Public API (analyze, write metrics)
+- `src/clojure_compiler_treemap_view/prometheus.clj` - Prometheus format export
+- `viewer.html` - Static D3.js visualization (loads metrics via URL param)
 
 ## Key Functions
 
@@ -48,8 +50,9 @@ analyze-nses -> build-hierarchy -> render-html -> open-html
 
 ### core.clj
 
-- `treemap!` - One-liner: analyze -> hierarchy -> render -> open browser.
-- `render-html` - Injects data + options into HTML template.
+- `analyze-nses` - Re-exported from analyze.clj for convenience.
+- `analyze-captured` - Re-exported from analyze.clj for convenience.
+- `write-metrics` - Writes metrics data to Prometheus format file.
 
 ## Metrics
 
@@ -116,8 +119,11 @@ Test fixtures in `test/clojure_compiler_treemap_view/fixtures/` - namespaces wit
 
 ## Dependencies
 
-- Java metrics agent (via -javaagent flag)
-- `jsonista` - JSON serialization for D3
+**Runtime**: Only `org.clojure/clojure` - zero third-party dependencies.
+
+**Viewer**: D3.js is inlined in `viewer.html` for browser visualization (static file, not a Clojure dependency).
+
+**Build-time**: Java metrics agent (via -javaagent flag).
 
 ## Agent Requirement
 
