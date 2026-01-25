@@ -87,7 +87,8 @@
                                                           clojure-compiler-treemap-view.fixtures.alpha.utils
                                                           clojure-compiler-treemap-view.fixtures.alpha.handlers
                                                           clojure-compiler-treemap-view.fixtures.beta])
-          by-name (group-by :name result)
+          compiler-result (:compiler result)
+          by-name (group-by :name compiler-result)
           unused (first (get by-name "unused-fn"))
           helper (first (get by-name "helper"))]
       (is (= [] errors) "should have no errors")
@@ -141,5 +142,5 @@
   (testing "analyze-nses continues when one namespace fails"
     (let [{:keys [result errors]} (cctv.analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha
                                                           clojure-compiler-treemap-view.fixtures.broken])]
-      (is (seq result) "should have results from working namespace")
+      (is (seq (:compiler result)) "should have results from working namespace")
       (is (some #(= 'clojure-compiler-treemap-view.fixtures.broken (:ns %)) errors)))))

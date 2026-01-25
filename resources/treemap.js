@@ -1,7 +1,11 @@
-const data = {{DATA}};
-const metricsOptions = {{OPTIONS}};
-const defaultSize = '{{DEFAULT_SIZE}}';
-const defaultColor = '{{DEFAULT_COLOR}}';
+// Data sources (injected by render-html)
+const sources = {{SOURCES}};
+const defaultSourceId = '{{DEFAULT_SOURCE}}';
+
+// Current source state
+let currentSource = sources.find(s => s.id === defaultSourceId) || sources[0];
+let data = currentSource.tree;
+let metricsOptions = currentSource.metrics;
 
 // Pre-compute childrenByName maps for O(1) child lookup
 function buildChildMaps(node) {
@@ -13,7 +17,6 @@ function buildChildMaps(node) {
     }
   }
 }
-buildChildMaps(data);
 
 // State
 let currentNode = data;
@@ -34,6 +37,7 @@ function escapeHtml(str) {
 const treemapEl = document.getElementById('treemap');
 const breadcrumbEl = document.getElementById('breadcrumb');
 const infoPanelEl = document.getElementById('info-panel');
+const sourceSelect = document.getElementById('source-select');
 const sizeSelect = document.getElementById('size-select');
 const colorSelect = document.getElementById('color-select');
 const showLabelsCheckbox = document.getElementById('show-labels');
@@ -223,14 +227,74 @@ function clearSearchHighlights() {
   treemapEl.querySelectorAll('.search-overlay').forEach(el => el.remove());
 }
 
-// Initialize dropdowns
-function initDropdowns() {
+// Initialize source selector
+function initSourceSelector() {
+  if (sources.length <= 1) {
+    // Hide selector if only one source
+    sourceSelect.parentElement.style.display = 'none';
+  } else {
+    sources.forEach(source => {
+      const option = document.createElement('option');
+      option.value = source.id;
+      option.textContent = source.label;
+      sourceSelect.appendChild(option);
+    });
+    sourceSelect.value = currentSource.id;
+    sourceSelect.addEventListener('change', switchSource);
+  }
+}
+
+// Switch to a different data source
+function switchSource() {
+  const sourceId = sourceSelect.value;
+  const newSource = sources.find(s => s.id === sourceId);
+  if (!newSource) return;
+
+  currentSource = newSource;
+  data = currentSource.tree;
+  metricsOptions = currentSource.metrics;
+
+  // Rebuild child maps for new data
+  buildChildMaps(data);
+
+  // Reset navigation state
+  currentNode = data;
+  pathStack = [];
+
+  // Rebuild dropdowns with new metrics
+  rebuildMetricDropdowns();
+
+  // Rebuild search index
+  allSymbols = getAllSymbols(data);
+
+  // Re-render
+  render();
+}
+
+// Rebuild metric dropdowns for current source
+function rebuildMetricDropdowns() {
+  sizeSelect.innerHTML = '';
+  colorSelect.innerHTML = '';
+
   metricsOptions.forEach(opt => {
-    sizeSelect.innerHTML += `<option value="${escapeHtml(opt.key)}">${escapeHtml(opt.label)}</option>`;
-    colorSelect.innerHTML += `<option value="${escapeHtml(opt.key)}">${escapeHtml(opt.label)}</option>`;
+    const sizeOpt = document.createElement('option');
+    sizeOpt.value = opt.key;
+    sizeOpt.textContent = opt.label;
+    sizeSelect.appendChild(sizeOpt);
+
+    const colorOpt = document.createElement('option');
+    colorOpt.value = opt.key;
+    colorOpt.textContent = opt.label;
+    colorSelect.appendChild(colorOpt);
   });
-  sizeSelect.value = defaultSize;
-  colorSelect.value = defaultColor;
+
+  sizeSelect.value = currentSource.defaultSize;
+  colorSelect.value = currentSource.defaultColor;
+}
+
+// Initialize dropdowns (just event listeners, populated by rebuildMetricDropdowns)
+function initDropdowns() {
+  rebuildMetricDropdowns();
   sizeSelect.addEventListener('change', render);
   colorSelect.addEventListener('change', render);
   showLabelsCheckbox.addEventListener('change', render);
@@ -561,6 +625,8 @@ function hideInfo() {
 }
 
 // Initialize
+buildChildMaps(data);
+initSourceSelector();
 initDropdowns();
 initSearch();
 render();

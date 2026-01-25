@@ -42,7 +42,7 @@
                                                    clojure-compiler-treemap-view.fixtures.alpha.utils
                                                    clojure-compiler-treemap-view.fixtures.alpha.handlers
                                                    clojure-compiler-treemap-view.fixtures.beta])
-          tree (cctv.analyze/build-hierarchy result)
+          tree (cctv.analyze/build-hierarchy (:compiler result))
           ccv-node (first (filter #(= "clojure-compiler-treemap-view" (:name %)) (:children tree)))]
       (is ccv-node "should have clojure-compiler-treemap-view top-level")
 
@@ -64,37 +64,22 @@
 (deftest test-render-html-generates-valid-output
   (testing "render-html generates valid HTML"
     (let [{:keys [result]} (cctv.analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha])
-          tree (cctv.analyze/build-hierarchy result)
-          content (core/render-html tree)]
+          content (core/render-html result)]
       (is (str/includes? content "<!DOCTYPE html"))
       (is (str/includes? content "d3.v7.min.js"))
       (is (str/includes? content "treemap"))
-      (is (str/includes? content "const defaultSize = 'expressions-raw'"))
-      (is (str/includes? content "const defaultColor = 'max-depth-raw'")))))
+      (is (str/includes? content "const sources ="))
+      (is (str/includes? content "const defaultSourceId = 'compiler'")))))
 
 (deftest test-render-html-with-options
-  (testing "render-html respects options"
+  (testing "render-html respects default-source option"
     (let [{:keys [result]} (cctv.analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha])
-          tree (cctv.analyze/build-hierarchy result)
-          content (core/render-html tree :size :expressions-expanded :color :max-depth-expanded)]
-      (is (str/includes? content "const defaultSize = 'expressions-expanded'"))
-      (is (str/includes? content "const defaultColor = 'max-depth-expanded'")))))
+          content (core/render-html result :default-source :classloader)]
+      (is (str/includes? content "const defaultSourceId = 'classloader'")))))
 
-(deftest test-treemap-validates-metric-keys
-  (testing "treemap! throws helpful error for invalid size metric"
-    (let [ex (try
-               (core/treemap! '[clojure-compiler-treemap-view.fixtures.alpha] :size :typo)
-               nil
-               (catch Exception e e))]
-      (is (some? ex) "should throw for invalid metric")
-      (is (str/includes? (ex-message ex) "Invalid :size metric"))
-      (is (str/includes? (ex-message ex) ":typo"))
-      (is (str/includes? (ex-message ex) ":expressions-raw"))))
-  (testing "treemap! throws helpful error for invalid color metric"
-    (let [ex (try
-               (core/treemap! '[clojure-compiler-treemap-view.fixtures.alpha] :color :bad-key)
-               nil
-               (catch Exception e e))]
-      (is (some? ex) "should throw for invalid metric")
-      (is (str/includes? (ex-message ex) "Invalid :color metric"))
-      (is (str/includes? (ex-message ex) ":bad-key")))))
+(deftest test-treemap-source-option
+  (testing "treemap! accepts :source option"
+    ;; Just test that the function accepts the option without error
+    ;; (actual browser opening is a side effect we can't easily test)
+    (let [{:keys [errors]} (core/treemap! '[clojure-compiler-treemap-view.fixtures.alpha] :source :classloader)]
+      (is (= [] errors)))))

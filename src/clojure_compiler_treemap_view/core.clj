@@ -6,26 +6,21 @@
             [clojure.java.browse :as browse]
             [clojure.string :as str]))
 
-(def ^:private metrics-options
-  "Available metrics for size and color dropdowns."
-  [{:key :expressions-raw :label "Expressions (Raw)"}
-   {:key :expressions-expanded :label "Expressions (Expanded)"}
-   {:key :max-depth-raw :label "Max Depth (Raw)"}
-   {:key :max-depth-expanded :label "Max Depth (Expanded)"}])
-
-(def ^:private valid-metric-keys
-  "Set of valid metric keys for validation."
-  (into #{} (map :key metrics-options)))
-
-(defn- validate-metric-key!
-  "Throws if key is not a valid metric. Used for :size and :color options."
-  [key param-name]
-  (when-not (contains? valid-metric-keys key)
-    (throw (ex-info (str "Invalid " param-name " metric: " key
-                         ". Valid options: " (pr-str (sort valid-metric-keys)))
-                    {:param param-name
-                     :value key
-                     :valid-options valid-metric-keys}))))
+(def ^:private source-configs
+  "Configuration for each data source."
+  {:compiler {:id "compiler"
+              :label "Compiler"
+              :metrics [{:key :expressions-raw :label "Expressions (Raw)"}
+                        {:key :expressions-expanded :label "Expressions (Expanded)"}
+                        {:key :max-depth-raw :label "Max Depth (Raw)"}
+                        {:key :max-depth-expanded :label "Max Depth (Expanded)"}]
+              :default-size :expressions-raw
+              :default-color :max-depth-raw}
+   :classloader {:id "classloader"
+                 :label "Class Loader"
+                 :metrics [{:key :bytecode-size :label "Bytecode Size (bytes)"}]
+                 :default-size :bytecode-size
+                 :default-color :bytecode-size}})
 
 (defn- slurp-resource
   "Slurp a resource file from the resources directory."
@@ -33,13 +28,29 @@
   (slurp (io/resource filename)))
 
 (defn render-html
-  "Generate complete HTML string for treemap visualization."
-  [tree-data & {:keys [size color title]
-                :or {size :expressions-raw
-                     color :max-depth-raw
-                     title "Code Metrics Treemap"}}]
-  (let [data-json (json/write-value-as-string tree-data)
-        options-json (json/write-value-as-string (mapv #(assoc % :key (name (:key %))) metrics-options))
+  "Generate complete HTML string for treemap visualization.
+
+   data-by-source: map of {:compiler [...] :classloader [...]}
+   Each value is flat fn-data that will be converted to a hierarchy."
+  [data-by-source & {:keys [default-source title]
+                     :or {default-source :compiler
+                          title "Code Metrics Treemap"}}]
+  (let [;; Build sources array for JS
+        sources (vec
+                  (for [[source-key data] data-by-source
+                        :when (seq data)
+                        :let [config (get source-configs source-key)
+                              tree (case source-key
+                                     :compiler (cctv.analyze/build-hierarchy data)
+                                     :classloader (cctv.analyze/build-class-hierarchy data))]]
+                    {:id (:id config)
+                     :label (:label config)
+                     :tree tree
+                     :metrics (mapv #(update % :key name) (:metrics config))
+                     :defaultSize (name (:default-size config))
+                     :defaultColor (name (:default-color config))}))
+        sources-json (json/write-value-as-string sources)
+        default-source-id (name default-source)
         html-template (slurp-resource "treemap.html")
         css (slurp-resource "treemap.css")
         js (slurp-resource "treemap.js")]
@@ -47,10 +58,8 @@
         (str/replace "{{TITLE}}" title)
         (str/replace "{{CSS}}" css)
         (str/replace "{{JS}}" js)
-        (str/replace "{{DATA}}" data-json)
-        (str/replace "{{OPTIONS}}" options-json)
-        (str/replace "{{DEFAULT_SIZE}}" (name size))
-        (str/replace "{{DEFAULT_COLOR}}" (name color)))))
+        (str/replace "{{SOURCES}}" sources-json)
+        (str/replace "{{DEFAULT_SOURCE}}" default-source-id))))
 
 (defn open-html
   "Write HTML and D3.js to temp directory and open in browser. Returns file path."
@@ -71,40 +80,35 @@
    Returns {:file \"path\" :errors [...]}.
 
    Options:
-     :size  - Metric for cell size (default: :expressions-raw)
-     :color - Metric for cell color (default: :max-depth-raw)
+     :source - Default data source to show (:compiler or :classloader, default :compiler)
 
-   Available metrics:
-     :expressions-raw, :expressions-expanded, :max-depth-raw, :max-depth-expanded
+   The UI provides dropdowns to switch between data sources and metrics.
 
    WARNING: Not thread-safe. Do not call concurrently from multiple threads."
-  [ns-syms & {:keys [size color]
-              :or {size :expressions-raw
-                   color :max-depth-raw}}]
-  (validate-metric-key! size :size)
-  (validate-metric-key! color :color)
+  [ns-syms & {:keys [source]
+              :or {source :compiler}}]
   (let [{:keys [result errors]} (cctv.analyze/analyze-nses ns-syms)
         file-path (-> result
-                      cctv.analyze/build-hierarchy
-                      (render-html :size size :color color)
+                      (render-html :default-source source)
                       open-html)]
     {:file file-path
      :errors errors}))
 
 
 (comment
-  (def analysis (cctv.analyze/analyze-captured))
+  (def analysis (cctv.analyze/analyze-nses '[clojure-compiler-treemap-view.analyze]))
   (def result (:result analysis))
   (def errors (:errors analysis))
 
-  #_(def analysis (cctv.analyze/analyze-nses (->> (all-ns) (map ns-name))))
+  ;; result now has :compiler and :classloader keys
+  (:compiler result)
+  (:classloader result)
 
-  ;; Check errors from last analysis
-  errors
-  (->> errors (map :ns) distinct)
+  ;; Build hierarchies
+  (def compiler-tree (cctv.analyze/build-hierarchy (:compiler result)))
+  (def class-tree (cctv.analyze/build-class-hierarchy (:classloader result)))
 
-  (def tree (cctv.analyze/build-hierarchy result))
-
-  (open-html (render-html tree))
+  ;; Open with all sources
+  (open-html (render-html result))
 
   ,)

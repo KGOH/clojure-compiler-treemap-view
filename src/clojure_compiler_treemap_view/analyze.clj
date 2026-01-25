@@ -15,6 +15,9 @@
 (def ^:const phase-raw "raw")
 (def ^:const phase-expanded "expanded")
 
+;; Forward declaration for class loading (defined later, used in analyze-nses)
+(declare process-loaded-classes)
+
 ;; ============================================================================
 ;; Error Tracking
 ;; ============================================================================
@@ -53,20 +56,26 @@
   "Clear capture buffers, execute body, then drain captured defs.
    Options (as leading keyword-value pairs before body):
      :include-var-refs? - Also clear var reference tracking (default: false)
+     :include-classes?  - Also clear class loader tracking (default: false)
    Binds `captured` to the result of get-captured-defs in body's scope.
 
    WARNING: Not thread-safe. Uses global buffers shared across all threads.
    Concurrent calls will corrupt each other's data."
-  {:arglists '([& body] [:include-var-refs? bool & body])}
+  {:arglists '([& body] [:include-var-refs? bool :include-classes? bool & body])}
   [& args]
-  (let [[opts body] (if (keyword? (first args))
-                      [(apply hash-map (take 2 args)) (drop 2 args)]
-                      [{} args])
-        include-var-refs? (:include-var-refs? opts)]
+  (let [[opts body] (loop [opts {} remaining args]
+                      (if (keyword? (first remaining))
+                        (recur (assoc opts (first remaining) (second remaining))
+                               (drop 2 remaining))
+                        [opts remaining]))
+        include-var-refs? (:include-var-refs? opts)
+        include-classes? (:include-classes? opts)]
     `(do
        (agent/clear!)
        ~(when include-var-refs?
           `(agent/clear-var-references!))
+       ~(when include-classes?
+          `(agent/clear-loaded-classes!))
        ~@(butlast body)
        (let [~'captured (agent/get-captured-defs)]
          ~(last body)))))
@@ -208,26 +217,34 @@
 (defn analyze-nses
   "Analyze multiple namespaces using compiler hooks.
 
-   This clears both capture buffers, loads all namespaces (in order),
-   then processes captured defs and marks unused vars.
+   This clears all capture buffers (defs, var refs, classes), loads all
+   namespaces (in order), then processes captured data.
 
-   Returns {:result [...] :errors [...]} where:
-     :result - seq of function data maps, each with :unused? in metrics
-     :errors - vector of error maps from this analysis run
+   Returns {:result {:compiler [...] :classloader [...]} :errors [...]} where:
+     :compiler   - seq of function data maps, each with :unused? in metrics
+     :classloader - seq of class data maps with :bytecode-size metric
+     :errors     - vector of error maps from this analysis run
 
    WARNING: Not thread-safe. Do not call concurrently from multiple threads."
   [ns-syms]
   (with-error-tracking
-    (with-capture :include-var-refs? true
+    (with-capture :include-var-refs? true :include-classes? true
       (doseq [ns-sym ns-syms]
         (try
           (require ns-sym :reload)
           (catch Throwable e
             (record-error! ns-sym :reload e))))
       (let [ns-strs (set (map str ns-syms))
+            ;; Compiler data
             fn-data (process-captured-defs captured ns-strs)
-            unused-vars (agent/find-unused-vars ns-syms)]
-        (add-unused-flags fn-data unused-vars)))))
+            unused-vars (agent/find-unused-vars ns-syms)
+            compiler-data (add-unused-flags fn-data unused-vars)
+            ;; Class loader data (munge ns names: foo-bar -> foo_bar)
+            ns-prefixes (set (map #(str/replace (str %) "-" "_") ns-syms))
+            classes (agent/get-loaded-classes)
+            class-data (process-loaded-classes classes ns-prefixes)]
+        {:compiler compiler-data
+         :classloader class-data}))))
 
 ;; ============================================================================
 ;; Hierarchy Building
@@ -266,4 +283,53 @@
                        (add-to-map-tree tree path ns metrics)))
                    {}
                    fn-data)]
+    (map-tree->d3-tree "root" map-tree)))
+
+;; ============================================================================
+;; Class Loading Data
+;; ============================================================================
+
+(defn class-name->path
+  "Convert Clojure class name to path segments for hierarchy.
+   Splits on both '.' (namespace/package) and '$' (inner class/fn).
+   \"foo.bar.baz$quux$fn__123\" -> [\"foo\" \"bar\" \"baz\" \"quux\" \"fn__123\"]"
+  [class-name]
+  (str/split class-name #"[.$]"))
+
+(defn- process-loaded-classes
+  "Transform loaded classes into fn-data format for hierarchy building.
+
+   Takes map of {class-name -> bytecode-size} and set of namespace
+   prefixes to filter by (munged, e.g. \"foo_bar\" not \"foo-bar\").
+
+   Returns vector of maps with :name :ns :file :line :metrics"
+  [classes ns-prefixes]
+  (vec
+    (for [[class-name bytecode-size] classes
+          :let [path (class-name->path class-name)
+                ns-str (str/join "." (butlast path))
+                name (last path)]
+          :when (or (nil? ns-prefixes)
+                    (some #(str/starts-with? class-name %) ns-prefixes))]
+      {:name name
+       :ns ns-str
+       :file nil
+       :line nil
+       :metrics {:bytecode-size bytecode-size}})))
+
+(defn build-class-hierarchy
+  "Build D3-compatible hierarchy from class data.
+   Reuses add-to-map-tree and map-tree->d3-tree from build-hierarchy.
+
+   Input: seq of {:name \"fn__123\" :ns \"foo.bar.baz$quux\" :metrics {:bytecode-size 1234}}
+   Output: {:name \"root\" :children [{:name \"foo\" :children [...]}]}"
+  [class-data]
+  (let [map-tree (reduce
+                   (fn [tree {:keys [ns name metrics]}]
+                     (let [path (if (str/blank? ns)
+                                  [name]
+                                  (conj (vec (str/split ns #"\.")) name))]
+                       (add-to-map-tree tree path ns metrics)))
+                   {}
+                   class-data)]
     (map-tree->d3-tree "root" map-tree)))
