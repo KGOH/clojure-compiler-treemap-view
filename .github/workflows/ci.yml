@@ -84,16 +84,23 @@ jobs:
       - name: Build metrics agent
         run: mvn -f metrics-agent/pom.xml package -q
 
-      - name: Generate treemap HTML
+      - name: Generate viewer and metrics
         run: |
           mkdir -p _site
           clojure -M:agent -e "
           (require '[clojure-compiler-treemap-view.core :as cctv]
-                   '[clojure-compiler-treemap-view.analyze :as cctv.analyze])
-          ;; analyze-captured processes forms captured during require above
+                   '[clojure-compiler-treemap-view.analyze :as cctv.analyze]
+                   '[jsonista.core :as json])
+          ;; Generate static viewer
+          (spit \"_site/index.html\" (cctv/render-viewer :title \"Clojure Compiler Treemap View\"))
+          ;; Generate metrics data (analyze-captured processes forms captured during require)
           (let [{:keys [result]} (cctv.analyze/analyze-captured)
-                html (cctv/render-html result :title \"Clojure Compiler Treemap View\")]
-            (spit \"_site/index.html\" html))
+                output {:version 1
+                        :generated (.toString (java.time.Instant/now))
+                        :namespaces [\"clojure-compiler-treemap-view\"]
+                        :compiler (:compiler result)
+                        :classloader (:classloader result)}]
+            (spit \"_site/metrics.json\" (json/write-value-as-string output)))
           "
 
       - name: Setup Pages

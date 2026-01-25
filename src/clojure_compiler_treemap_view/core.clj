@@ -14,11 +14,14 @@
 (defn render-html
   "Generate complete HTML string for treemap visualization.
 
-   data-by-source: map of {:compiler [...] :classloader [...]}
-   The flat data is embedded as window.TREEMAP_DATA; JS builds the hierarchy."
+   data-by-source: map of {:compiler [...] :classloader [...]}, or nil for static viewer.
+   When data is provided, it's embedded as window.TREEMAP_DATA.
+   When nil, viewer will try to load metrics.json or show upload UI."
   [data-by-source & {:keys [title]
                      :or {title "Code Metrics Treemap"}}]
-  (let [data-json (json/write-value-as-string data-by-source)
+  (let [data-json (if data-by-source
+                    (json/write-value-as-string data-by-source)
+                    "null")
         html-template (slurp-resource "treemap.html")
         d3 (slurp-resource "d3.v7.min.js")
         css (slurp-resource "treemap.css")
@@ -29,6 +32,13 @@
         (str/replace "{{CSS}}" css)
         (str/replace "{{JS}}" js)
         (str/replace "{{DATA}}" data-json))))
+
+(defn render-viewer
+  "Generate static viewer HTML (no embedded data).
+   The viewer will try to load metrics.json from same directory,
+   or accept data via ?data=URL query param, or show upload UI."
+  [& {:keys [title] :or {title "Code Metrics Treemap"}}]
+  (render-html nil :title title))
 
 (defn open-html
   "Write HTML to temp file and open in browser. Returns file path."

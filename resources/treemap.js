@@ -859,10 +859,30 @@ function initializeWithData(flatData) {
   }
 }
 
-function init() {
+async function loadDataFromUrl(url) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const jsonData = await response.json();
+    const flatData = jsonData.compiler ? jsonData : { compiler: jsonData };
+    initializeWithData(flatData);
+  } catch (err) {
+    alert(`Failed to load data from ${url}: ${err.message}`);
+    showUploadOverlay();
+  }
+}
+
+async function init() {
   initUpload();
 
-  if (TREEMAP_DATA && sources.length > 0) {
+  // Check for ?data=URL query param
+  const params = new URLSearchParams(window.location.search);
+  const dataUrl = params.get('data');
+
+  if (dataUrl) {
+    // Load data from URL param
+    await loadDataFromUrl(dataUrl);
+  } else if (TREEMAP_DATA && sources.length > 0) {
     // We have embedded data - initialize treemap
     buildChildMaps(data);
     initSourceSelector();
@@ -870,7 +890,18 @@ function init() {
     initSearch();
     render();
   } else {
-    // No embedded data - show upload UI
+    // Try loading metrics.json from same directory (for static deployments)
+    try {
+      const response = await fetch('metrics.json');
+      if (response.ok) {
+        const jsonData = await response.json();
+        const flatData = jsonData.compiler ? jsonData : { compiler: jsonData };
+        initializeWithData(flatData);
+        return;
+      }
+    } catch (e) {
+      // metrics.json not found, show upload UI
+    }
     showUploadOverlay();
   }
 }
