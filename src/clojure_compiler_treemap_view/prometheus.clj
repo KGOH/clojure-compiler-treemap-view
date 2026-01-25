@@ -38,9 +38,9 @@
   (let [labels {:ns ns :name name :full_name full-name}]
     [(metric-line "clojure_bytecode_size" labels (:bytecode-size metrics))]))
 
-(defn write-prometheus
-  "Write metrics data in Prometheus format. Returns absolute path written."
-  [metrics-data path]
+(defn format-prometheus
+  "Format metrics data as Prometheus exposition format string."
+  [metrics-data]
   (let [header ["# Clojure code metrics - Prometheus format"]
         compiler-header ["# HELP clojure_expressions_raw S-expression count before macro expansion"
                          "# TYPE clojure_expressions_raw gauge"
@@ -56,7 +56,12 @@
         classloader-header ["# HELP clojure_bytecode_size Class bytecode size in bytes"
                             "# TYPE clojure_bytecode_size gauge"]
         classloader-lines (mapcat classloader-entry->lines (:classloader metrics-data))
-        all-lines (concat header [""] compiler-header compiler-lines [""] classloader-header classloader-lines)
-        file (.getAbsolutePath (java.io.File. ^String path))]
-    (spit file (str/join "\n" all-lines))
+        all-lines (concat header [""] compiler-header compiler-lines [""] classloader-header classloader-lines)]
+    (str/join "\n" all-lines)))
+
+(defn write-prometheus
+  "Write metrics data in Prometheus format. Returns absolute path written."
+  [metrics-data path]
+  (let [file (.getAbsolutePath (java.io.File. ^String path))]
+    (spit file (format-prometheus metrics-data))
     file))
