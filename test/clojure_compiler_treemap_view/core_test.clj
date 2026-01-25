@@ -1,7 +1,7 @@
 (ns clojure-compiler-treemap-view.core-test
   (:require [clojure.test :refer [deftest testing is]]
             [clojure-compiler-treemap-view.core :as core]
-            [clojure-compiler-treemap-view.analyze :as analyze]
+            [clojure-compiler-treemap-view.analyze :as cctv.analyze]
             [clojure.string :as str]))
 
 ;; Ensure fixture namespaces are loaded
@@ -16,7 +16,7 @@
                    {:name "fn2" :ns "foo.bar" :metrics {:loc 20}}
                    {:name "fn3" :ns "foo.baz" :metrics {:loc 15}}
                    {:name "fn4" :ns "qux" :metrics {:loc 5}}]
-          tree (analyze/build-hierarchy fn-data)]
+          tree (cctv.analyze/build-hierarchy fn-data)]
       ;; Root has children
       (is (= "root" (:name tree)))
       (is (seq (:children tree)))
@@ -38,11 +38,11 @@
 
 (deftest test-hierarchy-with-fixtures
   (testing "groups fixture namespaces correctly"
-    (let [{:keys [result]} (analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha
+    (let [{:keys [result]} (cctv.analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha
                                                    clojure-compiler-treemap-view.fixtures.alpha.utils
                                                    clojure-compiler-treemap-view.fixtures.alpha.handlers
                                                    clojure-compiler-treemap-view.fixtures.beta])
-          tree (analyze/build-hierarchy result)
+          tree (cctv.analyze/build-hierarchy result)
           ccv-node (first (filter #(= "clojure-compiler-treemap-view" (:name %)) (:children tree)))]
       (is ccv-node "should have clojure-compiler-treemap-view top-level")
 
@@ -63,8 +63,8 @@
 
 (deftest test-render-html-generates-valid-output
   (testing "render-html generates valid HTML"
-    (let [{:keys [result]} (analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha])
-          tree (analyze/build-hierarchy result)
+    (let [{:keys [result]} (cctv.analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha])
+          tree (cctv.analyze/build-hierarchy result)
           content (core/render-html tree)]
       (is (str/includes? content "<!DOCTYPE html"))
       (is (str/includes? content "d3.v7.min.js"))
@@ -74,8 +74,8 @@
 
 (deftest test-render-html-with-options
   (testing "render-html respects options"
-    (let [{:keys [result]} (analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha])
-          tree (analyze/build-hierarchy result)
+    (let [{:keys [result]} (cctv.analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha])
+          tree (cctv.analyze/build-hierarchy result)
           content (core/render-html tree :size :expressions-expanded :color :max-depth-expanded)]
       (is (str/includes? content "const defaultSize = 'expressions-expanded'"))
       (is (str/includes? content "const defaultColor = 'max-depth-expanded'")))))

@@ -1,6 +1,6 @@
 (ns clojure-compiler-treemap-view.core
   "HTML generation and public API for clojure-compiler-treemap-view."
-  (:require [clojure-compiler-treemap-view.analyze :as analyze]
+  (:require [clojure-compiler-treemap-view.analyze :as cctv.analyze]
             [jsonista.core :as json]
             [clojure.java.io :as io]
             [clojure.java.browse :as browse]
@@ -83,9 +83,9 @@
                    color :max-depth-raw}}]
   (validate-metric-key! size :size)
   (validate-metric-key! color :color)
-  (let [{:keys [result errors]} (analyze/analyze-nses ns-syms)
+  (let [{:keys [result errors]} (cctv.analyze/analyze-nses ns-syms)
         file-path (-> result
-                      analyze/build-hierarchy
+                      cctv.analyze/build-hierarchy
                       (render-html :size size :color color)
                       open-html)]
     {:file file-path
@@ -93,17 +93,17 @@
 
 
 (comment
-  (def analysis (analyze/analyze-captured))
+  (def analysis (cctv.analyze/analyze-captured))
   (def result (:result analysis))
   (def errors (:errors analysis))
 
-  #_(def analysis (analyze/analyze-nses (->> (all-ns) (map ns-name))))
+  #_(def analysis (cctv.analyze/analyze-nses (->> (all-ns) (map ns-name))))
 
   ;; Check errors from last analysis
   errors
   (->> errors (map :ns) distinct)
 
-  (def tree (analyze/build-hierarchy result))
+  (def tree (cctv.analyze/build-hierarchy result))
 
   (open-html (render-html tree))
 

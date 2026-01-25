@@ -63,14 +63,14 @@ The agent must be loaded at JVM startup. Without it, all analysis functions will
 ### Programmatic Use
 
 ```clojure
-(require '[clojure-compiler-treemap-view.analyze :as analyze])
+(require '[clojure-compiler-treemap-view.analyze :as cctv.analyze])
 
 ;; Get raw analysis data
-(def analysis (analyze/analyze-nses '[my.namespace]))
+(def analysis (cctv.analyze/analyze-nses '[my.namespace]))
 ;; => {:result [...] :errors [...]}
 
 ;; Build D3-compatible hierarchy
-(def tree (analyze/build-hierarchy (:result analysis)))
+(def tree (cctv.analyze/build-hierarchy (:result analysis)))
 
 ;; Render to HTML string (no browser)
 (def html (cctv/render-html tree :size :expressions-raw :color :max-depth-raw))
