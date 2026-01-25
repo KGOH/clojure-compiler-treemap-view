@@ -78,6 +78,25 @@ The agent must be loaded at JVM startup. Without it, all analysis functions will
 
 Analysis functions return `{:result [...] :errors [...]}`. Check `:errors` for namespaces that failed to load.
 
+### Discovering What You Actually Loaded
+
+`treemap!` and `analyze-nses` require you to name namespaces upfront. But when you `require` code, the agent captures everything that compiles—including transitive dependencies you might not realize you're pulling in.
+
+Use `analyze-captured` to see what's actually been compiled during your session:
+
+```clojure
+;; Use your REPL normally
+(require '[some.library])
+(some.library/do-stuff)
+
+;; Then see everything that compiled
+(let [{:keys [result]} (cctv.analyze/analyze-captured)
+      tree (cctv.analyze/build-hierarchy result)]
+  (cctv/open-html (cctv/render-html tree)))
+```
+
+This reveals the true cost of dependencies. A "simple" library that pulls in 50 helper namespaces? You'll see it on the treemap.
+
 ## Available Metrics
 
 | Metric | Description |
