@@ -1170,11 +1170,11 @@ function initializeWithData(flatData) {
 
 function rebuildWithFilters() {
   if (!originalFlatData) return;
-  const currentSourceName = currentSource?.name;
+  const currentSourceId = currentSource?.id;
   sources = buildSources(originalFlatData);
 
   // Try to stay on the same source
-  currentSource = sources.find(s => s.name === currentSourceName) || sources[0] || null;
+  currentSource = sources.find(s => s.id === currentSourceId) || sources[0] || null;
   data = currentSource ? currentSource.tree : null;
   metricsOptions = currentSource ? currentSource.metrics : [];
 
@@ -1189,18 +1189,46 @@ function rebuildWithFilters() {
   }
 }
 
-function initFilterCheckboxes() {
-  const filterCheckboxes = [
-    'hide-jdk',
-    'hide-clojure',
-    'hide-agent',
-    'hide-cctv'
-  ];
+const FILTER_CHECKBOX_IDS = ['hide-jdk', 'hide-clojure', 'hide-agent', 'hide-cctv'];
 
-  filterCheckboxes.forEach(id => {
+// Read checkbox states from URL params (default: true/checked)
+function initCheckboxesFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  FILTER_CHECKBOX_IDS.forEach(id => {
     const checkbox = document.getElementById(id);
     if (checkbox) {
-      checkbox.addEventListener('change', rebuildWithFilters);
+      const paramValue = params.get(id);
+      // Default is checked (true), only uncheck if explicitly set to '0' or 'false'
+      checkbox.checked = paramValue !== '0' && paramValue !== 'false';
+    }
+  });
+}
+
+// Update URL params when checkbox changes
+function updateUrlFromCheckboxes() {
+  const params = new URLSearchParams(window.location.search);
+  FILTER_CHECKBOX_IDS.forEach(id => {
+    const checkbox = document.getElementById(id);
+    if (checkbox) {
+      if (checkbox.checked) {
+        params.delete(id); // Default is checked, no need to store
+      } else {
+        params.set(id, '0');
+      }
+    }
+  });
+  const newUrl = params.toString() ? `?${params.toString()}` : window.location.pathname;
+  window.history.replaceState({}, '', newUrl);
+}
+
+function initFilterCheckboxes() {
+  FILTER_CHECKBOX_IDS.forEach(id => {
+    const checkbox = document.getElementById(id);
+    if (checkbox) {
+      checkbox.addEventListener('change', () => {
+        updateUrlFromCheckboxes();
+        rebuildWithFilters();
+      });
     }
   });
 }
@@ -1221,6 +1249,9 @@ async function loadDataFromUrl(url) {
 
 async function init() {
   initUpload();
+
+  // Initialize checkbox states from URL params before loading data
+  initCheckboxesFromUrl();
 
   // Check for ?data=URL query param
   const params = new URLSearchParams(window.location.search);
