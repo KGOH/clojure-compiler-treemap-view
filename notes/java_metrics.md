@@ -84,17 +84,162 @@ This is truly "attached to the actual program":
 
 ## Metrics We Can Extract
 
-From bytecode via ASM:
+### Without ASM
 
-| Metric | Source | Value |
-|--------|--------|-------|
-| Bytecode size | `bytecode.length` | Raw instruction weight |
-| Method count | ASM `visitMethod` | Complexity indicator |
-| Field count | ASM `visitField` | Data complexity |
-| Dependencies | ASM `visitMethodInsn`, `visitFieldInsn` | What this class references |
-| Annotations | ASM `visitAnnotation` | Framework magic indicator |
+| Metric | Source | Description |
+|--------|--------|-------------|
+| Bytecode size | `bytecode.length` | Raw class file size in bytes |
+
+### With ASM: Structural Metrics (from ClassVisitor)
+
+| Metric | ASM Callback | Description |
+|--------|--------------|-------------|
+| Field count | `visitField()` | Number of fields (closed-overs for Clojure fns) |
+| Method count | `visitMethod()` | Number of methods |
+| Interface count | `visit()` interfaces param | Number of implemented interfaces |
+| Annotation count | `visitAnnotation()` | Number of class-level annotations |
+
+### With ASM: Instruction Metrics (from MethodVisitor)
+
+| Metric | ASM Callback | Description |
+|--------|--------------|-------------|
+| Instruction count | All `visit*Insn()` methods | Total opcodes across all methods |
+| Branch count | `visitJumpInsn()` | IFEQ, IFNE, GOTO, etc. - control flow complexity |
+| Invoke count | `visitMethodInsn()` | Method calls (invokevirtual, invokestatic, etc.) |
+| Field access count | `visitFieldInsn()` | GETFIELD, PUTFIELD, GETSTATIC, PUTSTATIC |
+| Try-catch count | `visitTryCatchBlock()` | Exception handler count |
+| Local variable count | `visitLocalVariable()` | Only if debug info present |
+
+### With ASM: Dependency Metrics
+
+| Metric | ASM Callback | Description |
+|--------|--------------|-------------|
+| Outgoing class refs | `visitMethodInsn()` owner param | Distinct classes this class calls |
+| Type refs | `visitTypeInsn()` | NEW, CHECKCAST, INSTANCEOF targets |
+
+### ASM Options
+
+**Option 1: Add explicit dependency**
+```xml
+<dependency>
+    <groupId>org.ow2.asm</groupId>
+    <artifactId>asm</artifactId>
+</dependency>
+```
+Classes: `org.objectweb.asm.ClassReader`, `org.objectweb.asm.ClassVisitor`, etc.
+
+**Option 2: Use ByteBuddy's shaded ASM** (no new dependency)
+
+ByteBuddy bundles a complete copy of ASM with renamed packages:
+- Original: `org.objectweb.asm.ClassReader`
+- Shaded: `net.bytebuddy.jar.asm.ClassReader`
+
+Same API, already in classpath since we use ByteBuddy for compiler hooks.
+
+---
+
+## Metric Evaluation for Clojure Treemap
+
+Not all bytecode metrics are equally useful for visualizing Clojure code. Here's an assessment:
+
+### High Value: Field Count (Closed-Overs)
+
+For Clojure-generated `namespace$fn__12345` classes, **fields = closed-over values**.
+
+```clojure
+(let [db-conn (get-connection)
+      config (load-config)
+      cache (atom {})]
+  (fn [request]
+    (process request db-conn config cache)))
+```
+
+The generated fn class has fields for `db-conn`, `config`, and `cache`.
+
+**What high field count reveals:**
+- Memory footprint per function instance (matters if you create many)
+- Implicit coupling - functions with many closed-overs are tangled with their creation context
+- Potential for accidental head retention (closing over large collections)
+- Refactoring candidates (could be split or use explicit state)
+
+**Treemap use:** Color by field count to spot "heavy" closures instantly.
+
+### Medium-High Value: Instruction Count
+
+Better than raw bytecode size. Byte size includes constant pool entries, debug info, method signatures, etc. Instruction count is closer to "how much work does this code actually do."
+
+Requires walking each method's Code attribute and counting opcodes.
+
+### Medium Value: Outgoing Reference Count
+
+Simple scalar: how many distinct classes does this class call? (Not full dependency graph - just the count.)
+
+Useful for identifying code with many external dependencies without building a full graph visualization.
+
+### Medium Value: Branch Count
+
+Number of conditional jump instructions (`IFEQ`, `IFNE`, `TABLESWITCH`, `LOOKUPSWITCH`, `GOTO`, etc.).
+
+Proxy for **cyclomatic complexity at bytecode level**.
+
+| Clojure construct | Branch instructions generated |
+|-------------------|------------------------------|
+| `if`, `when`, `when-not` | 1+ branches |
+| `cond` | Multiple branches (one per clause) |
+| `case` | `TABLESWITCH` or `LOOKUPSWITCH` |
+| `loop/recur` | `GOTO` for the loop back |
+| `or`, `and` | Short-circuit branches |
+
+**Caveat:** For Clojure, high branch counts often just mean pattern matching (`cond`, `case`) which isn't necessarily bad. Conflates loops with conditionals.
+
+### Low Value: Method Count
+
+For Clojure fns, it's almost always 1-2 (`invoke`, `invokeStatic`). Only shows variation for `defrecord`, `deftype`, or `gen-class`. Not useful for treemap visualization of typical Clojure code.
+
+### Skip: Annotations
+
+Clojure doesn't use Java annotations meaningfully. Irrelevant.
+
+### Skip: Full Dependency Graph
+
+Tracking what classes each class calls is easy to collect, but it's a **graph metric**, not a treemap metric. You'd visualize it as a force-directed graph or dependency matrix. Different scope entirely - don't conflate with treemap work.
+
+---
+
+## Implementation: Using ByteBuddy's Shaded ASM
+
+Since we already use ByteBuddy for compiler hooks, we can use its bundled ASM without adding a new dependency.
 
 ```java
+import net.bytebuddy.jar.asm.ClassReader;
+import net.bytebuddy.jar.asm.ClassVisitor;
+import net.bytebuddy.jar.asm.MethodVisitor;
+import net.bytebuddy.jar.asm.Opcodes;
+```
+
+### Recommended Metrics to Implement
+
+Based on value for Clojure treemap visualization:
+
+| Priority | Metric | Why |
+|----------|--------|-----|
+| 1 | Field count | Closed-overs - high value for Clojure fns |
+| 2 | Instruction count | Better than byte size for "code volume" |
+| 3 | Branch count | Complexity proxy |
+| 4 | Outgoing class ref count | Coupling indicator |
+
+### Performance
+
+- ASM uses streaming visitor pattern - microseconds per class
+- Already intercepting class loads, marginal cost is negligible
+- No allocations during traversal except final metrics storage
+
+---
+
+```java
+import net.bytebuddy.jar.asm.*;
+import static net.bytebuddy.jar.asm.Opcodes.*;
+
 private static ClassMetrics parseWithASM(byte[] bytecode) {
     ClassReader reader = new ClassReader(bytecode);
     MetricsVisitor visitor = new MetricsVisitor();
@@ -103,21 +248,13 @@ private static ClassMetrics parseWithASM(byte[] bytecode) {
 }
 
 class MetricsVisitor extends ClassVisitor {
-    int methodCount = 0;
     int fieldCount = 0;
-    Set<String> dependencies = new HashSet<>();
+    int instructionCount = 0;
+    int branchCount = 0;
+    Set<String> outgoingRefs = new HashSet<>();
 
-    @Override
-    public MethodVisitor visitMethod(int access, String name, String desc,
-                                      String signature, String[] exceptions) {
-        methodCount++;
-        return new MethodVisitor(ASM9) {
-            @Override
-            public void visitMethodInsn(int opcode, String owner,
-                                        String name, String desc, boolean itf) {
-                dependencies.add(owner);  // Track what this method calls
-            }
-        };
+    MetricsVisitor() {
+        super(ASM9);
     }
 
     @Override
@@ -125,6 +262,42 @@ class MetricsVisitor extends ClassVisitor {
                                    String signature, Object value) {
         fieldCount++;
         return null;
+    }
+
+    @Override
+    public MethodVisitor visitMethod(int access, String name, String desc,
+                                      String signature, String[] exceptions) {
+        return new MethodVisitor(ASM9) {
+            @Override
+            public void visitInsn(int opcode) {
+                instructionCount++;
+            }
+
+            @Override
+            public void visitIntInsn(int opcode, int operand) {
+                instructionCount++;
+            }
+
+            @Override
+            public void visitVarInsn(int opcode, int var) {
+                instructionCount++;
+            }
+
+            @Override
+            public void visitJumpInsn(int opcode, Label label) {
+                instructionCount++;
+                branchCount++;  // IFEQ, IFNE, GOTO, etc.
+            }
+
+            @Override
+            public void visitMethodInsn(int opcode, String owner,
+                                        String name, String desc, boolean itf) {
+                instructionCount++;
+                outgoingRefs.add(owner);
+            }
+
+            // ... other visit*Insn methods for complete instruction count
+        };
     }
 }
 ```
