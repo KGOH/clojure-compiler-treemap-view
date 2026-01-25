@@ -169,7 +169,7 @@
      :ns-syms - Optional collection of namespace symbols to filter by.
                 If nil, processes all captured defs.
 
-   Returns {:result [...] :errors [...]}.
+   Returns {:result {:compiler [...] :classloader [...]} :errors [...]}.
 
    WARNING: Not thread-safe. Do not call concurrently from multiple threads."
   [& {:keys [ns-syms]}]
@@ -178,8 +178,15 @@
         fn-data (process-captured-defs captured ns-strs)
         nses-to-check (or ns-syms
                           (->> fn-data (map :ns) distinct (map symbol)))
-        unused-vars (agent/find-unused-vars nses-to-check)]
-    {:result (add-unused-flags fn-data unused-vars)
+        unused-vars (agent/find-unused-vars nses-to-check)
+        compiler-data (add-unused-flags fn-data unused-vars)
+        ;; Class loader data (munge ns names: foo-bar -> foo_bar)
+        ns-prefixes (when ns-syms
+                      (set (map #(str/replace (str %) "-" "_") ns-syms)))
+        classes (agent/get-loaded-classes)
+        class-data (process-loaded-classes classes ns-prefixes)]
+    {:result {:compiler compiler-data
+              :classloader class-data}
      :errors []}))
 
 ;; ============================================================================
@@ -192,11 +199,12 @@
    Clears the capture buffer, reloads the namespace (triggering compilation),
    then processes the captured def forms into metrics.
 
-   Returns {:result [...] :errors [...]} where:
-     :result - vector of fn-data maps
-     :errors - vector of error maps from this analysis run
+   Returns {:result {:compiler [...] :classloader [...]} :errors [...]} where:
+     :compiler   - vector of fn-data maps
+     :classloader - vector of class data maps with :bytecode-size metric
+     :errors     - vector of error maps from this analysis run
 
-   Each result entry contains:
+   Each compiler entry contains:
      :name    - Var name (string)
      :ns      - Namespace (string)
      :file    - Source file (nil - hooks don't capture this)
@@ -207,12 +215,19 @@
   [ns-sym]
   (with-error-tracking
     (try
-      (with-capture
+      (with-capture :include-classes? true
         (require ns-sym :reload)
-        (process-captured-defs captured #{(str ns-sym)}))
+        (let [ns-str (str ns-sym)
+              compiler-data (process-captured-defs captured #{ns-str})
+              ;; Class loader data (munge ns name: foo-bar -> foo_bar)
+              ns-prefix (str/replace ns-str "-" "_")
+              classes (agent/get-loaded-classes)
+              class-data (process-loaded-classes classes #{ns-prefix})]
+          {:compiler compiler-data
+           :classloader class-data}))
       (catch Throwable e
         (record-error! ns-sym :analyze e)
-        []))))
+        {:compiler [] :classloader []}))))
 
 (defn analyze-nses
   "Analyze multiple namespaces using compiler hooks.
