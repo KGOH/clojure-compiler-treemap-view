@@ -52,3 +52,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   outline-offset: -3px;
   z-index: 10;
 }
+/* Upload button */
+.upload-btn { padding: 6px 12px; border-radius: 4px; border: 1px solid #586e75; background: #002b36; color: #93a1a1; font-size: 14px; cursor: pointer; }
+.upload-btn:hover { border-color: #839496; background: #073642; }
+/* Upload overlay */
+.upload-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 43, 54, 0.95); display: none; align-items: center; justify-content: center; z-index: 2000; }
+.upload-overlay.visible { display: flex; }
+.upload-zone { width: 400px; height: 250px; border: 2px dashed #586e75; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; }
+.upload-zone:hover, .upload-zone.dragover { border-color: #2aa198; background: rgba(42, 161, 152, 0.1); }
+.upload-icon { font-size: 48px; margin-bottom: 15px; }
+.upload-text { font-size: 16px; color: #93a1a1; margin-bottom: 10px; }
+.upload-hint { font-size: 12px; color: #586e75; font-family: monospace; }

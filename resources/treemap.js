@@ -1,10 +1,141 @@
-// Data sources (injected by render-html)
-const sources = {{SOURCES}};
+// =============================================================================
+// Hierarchy Building (from flat data)
+// =============================================================================
 
-// Current source state (first source is default)
-let currentSource = sources[0];
-let data = currentSource.tree;
-let metricsOptions = currentSource.metrics;
+// Split namespace string into path segments: "foo.bar.baz" -> ["foo", "bar", "baz"]
+function nsToPath(nsStr) {
+  return nsStr.split('.');
+}
+
+// Split class name into path segments: "foo.bar$baz$fn__123" -> ["foo", "bar", "baz", "fn__123"]
+function classNameToPath(className) {
+  return className.split(/[.$]/);
+}
+
+// Add a node to nested tree structure
+// nodeData is an object with metrics and optionally ns/full-name
+function addToTree(tree, path, nodeData) {
+  if (path.length === 1) {
+    const name = path[0];
+    // Merge nodeData onto existing node (which may already have children)
+    tree[name] = { ...tree[name], ...nodeData };
+  } else {
+    const name = path[0];
+    if (!tree[name]) tree[name] = {};
+    if (!tree[name].children) tree[name].children = {};
+    addToTree(tree[name].children, path.slice(1), nodeData);
+  }
+}
+
+// Convert nested map to D3-compatible tree with name/children
+function mapToD3Tree(node, name = 'root') {
+  const result = { name };
+
+  if (node.ns !== undefined) result.ns = node.ns;
+  if (node['full-name'] !== undefined) result['full-name'] = node['full-name'];
+  if (node.metrics) result.metrics = node.metrics;
+
+  if (node.children && typeof node.children === 'object') {
+    result.children = Object.entries(node.children).map(([k, v]) => mapToD3Tree(v, k));
+  }
+
+  return result;
+}
+
+// Build D3-compatible hierarchy from flat data
+// sourceType: 'compiler' or 'classloader'
+function buildHierarchy(flatData, sourceType) {
+  const tree = {};
+
+  for (const item of flatData) {
+    let path;
+    let nodeData;
+
+    if (sourceType === 'classloader') {
+      // Use full-name for path
+      path = classNameToPath(item['full-name']);
+      nodeData = {
+        'full-name': item['full-name'],
+        metrics: item.metrics
+      };
+    } else {
+      // Compiler: ns + name for path
+      path = [...nsToPath(item.ns), item.name];
+      nodeData = {
+        ns: item.ns,
+        metrics: item.metrics
+      };
+    }
+
+    addToTree(tree, path, nodeData);
+  }
+
+  return mapToD3Tree({ children: tree });
+}
+
+// =============================================================================
+// Source Configuration
+// =============================================================================
+
+const sourceConfigs = {
+  compiler: {
+    id: 'compiler',
+    label: 'Compiler',
+    metrics: [
+      { key: 'expressions-raw', label: 'Expressions (Raw)' },
+      { key: 'expressions-expanded', label: 'Expressions (Expanded)' },
+      { key: 'max-depth-raw', label: 'Max Depth (Raw)' },
+      { key: 'max-depth-expanded', label: 'Max Depth (Expanded)' }
+    ],
+    defaultSize: 'expressions-raw',
+    defaultColor: 'max-depth-raw'
+  },
+  classloader: {
+    id: 'classloader',
+    label: 'Class Loader',
+    metrics: [
+      { key: 'bytecode-size', label: 'Bytecode Size (bytes)' }
+    ],
+    defaultSize: 'bytecode-size',
+    defaultColor: 'bytecode-size'
+  }
+};
+
+// =============================================================================
+// Data Initialization
+// =============================================================================
+
+// Embedded data (injected by render-html, or null for standalone viewer)
+const TREEMAP_DATA = window.TREEMAP_DATA || null;
+
+// Build sources array from flat data
+function buildSources(flatData) {
+  const sources = [];
+
+  if (flatData.compiler && flatData.compiler.length > 0) {
+    const config = sourceConfigs.compiler;
+    sources.push({
+      ...config,
+      tree: buildHierarchy(flatData.compiler, 'compiler')
+    });
+  }
+
+  if (flatData.classloader && flatData.classloader.length > 0) {
+    const config = sourceConfigs.classloader;
+    sources.push({
+      ...config,
+      tree: buildHierarchy(flatData.classloader, 'classloader')
+    });
+  }
+
+  return sources;
+}
+
+// Current state
+let sources = TREEMAP_DATA ? buildSources(TREEMAP_DATA) : [];
+let currentSource = sources[0] || null;
+let data = currentSource ? currentSource.tree : null;
+let metricsOptions = currentSource ? currentSource.metrics : [];
 
 // Pre-compute childrenByName maps for O(1) child lookup
 function buildChildMaps(node) {
@@ -228,10 +359,14 @@ function clearSearchHighlights() {
 
 // Initialize source selector
 function initSourceSelector() {
+  // Clear existing options
+  sourceSelect.innerHTML = '';
+
   if (sources.length <= 1) {
     // Hide selector if only one source
     sourceSelect.parentElement.style.display = 'none';
   } else {
+    sourceSelect.parentElement.style.display = '';
     sources.forEach(source => {
       const option = document.createElement('option');
       option.value = source.id;
@@ -239,6 +374,8 @@ function initSourceSelector() {
       sourceSelect.appendChild(option);
     });
     sourceSelect.value = currentSource.id;
+    // Remove old listener before adding new one
+    sourceSelect.removeEventListener('change', switchSource);
     sourceSelect.addEventListener('change', switchSource);
   }
 }
@@ -628,12 +765,117 @@ function hideInfo() {
   infoPanelEl.innerHTML = '';
 }
 
-// Initialize
-buildChildMaps(data);
-initSourceSelector();
-initDropdowns();
-initSearch();
-render();
+// =============================================================================
+// File Upload
+// =============================================================================
+
+const uploadOverlay = document.getElementById('upload-overlay');
+const uploadZone = document.getElementById('upload-zone');
+const fileInput = document.getElementById('file-input');
+const uploadBtn = document.getElementById('upload-btn');
+
+function showUploadOverlay() {
+  if (uploadOverlay) uploadOverlay.classList.add('visible');
+}
+
+function hideUploadOverlay() {
+  if (uploadOverlay) uploadOverlay.classList.remove('visible');
+}
+
+function loadDataFromFile(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const jsonData = JSON.parse(e.target.result);
+      // Handle both raw format and wrapped format with metadata
+      const flatData = jsonData.compiler ? jsonData : { compiler: jsonData };
+      initializeWithData(flatData);
+      hideUploadOverlay();
+    } catch (err) {
+      alert('Failed to parse JSON file: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function initUpload() {
+  if (!uploadZone || !fileInput) return;
+
+  // File input change
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+      loadDataFromFile(e.target.files[0]);
+    }
+  });
+
+  // Drag and drop
+  uploadZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadZone.classList.add('dragover');
+  });
+
+  uploadZone.addEventListener('dragleave', () => {
+    uploadZone.classList.remove('dragover');
+  });
+
+  uploadZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+    if (e.dataTransfer.files.length > 0) {
+      loadDataFromFile(e.dataTransfer.files[0]);
+    }
+  });
+
+  // Click to select file
+  uploadZone.addEventListener('click', () => {
+    fileInput.click();
+  });
+
+  // Upload button (always visible) to load different data
+  if (uploadBtn) {
+    uploadBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showUploadOverlay();
+    });
+  }
+}
+
+// =============================================================================
+// Initialization
+// =============================================================================
+
+function initializeWithData(flatData) {
+  sources = buildSources(flatData);
+  currentSource = sources[0] || null;
+  data = currentSource ? currentSource.tree : null;
+  metricsOptions = currentSource ? currentSource.metrics : [];
+
+  if (data) {
+    buildChildMaps(data);
+    initSourceSelector();
+    initDropdowns();
+    initSearch();
+    render();
+  }
+}
+
+function init() {
+  initUpload();
+
+  if (TREEMAP_DATA && sources.length > 0) {
+    // We have embedded data - initialize treemap
+    buildChildMaps(data);
+    initSourceSelector();
+    initDropdowns();
+    initSearch();
+    render();
+  } else {
+    // No embedded data - show upload UI
+    showUploadOverlay();
+  }
+}
+
+init();
 
 // Handle resize with debounce
 let resizeTimeout;

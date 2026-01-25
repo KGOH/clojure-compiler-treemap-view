@@ -6,22 +6,6 @@
             [clojure.java.browse :as browse]
             [clojure.string :as str]))
 
-(def ^:private source-configs
-  "Configuration for each data source."
-  {:compiler {:id "compiler"
-              :label "Compiler"
-              :metrics [{:key :expressions-raw :label "Expressions (Raw)"}
-                        {:key :expressions-expanded :label "Expressions (Expanded)"}
-                        {:key :max-depth-raw :label "Max Depth (Raw)"}
-                        {:key :max-depth-expanded :label "Max Depth (Expanded)"}]
-              :default-size :expressions-raw
-              :default-color :max-depth-raw}
-   :classloader {:id "classloader"
-                 :label "Class Loader"
-                 :metrics [{:key :bytecode-size :label "Bytecode Size (bytes)"}]
-                 :default-size :bytecode-size
-                 :default-color :bytecode-size}})
-
 (defn- slurp-resource
   "Slurp a resource file from the resources directory."
   [filename]
@@ -31,24 +15,10 @@
   "Generate complete HTML string for treemap visualization.
 
    data-by-source: map of {:compiler [...] :classloader [...]}
-   Each value is flat fn-data that will be converted to a hierarchy."
+   The flat data is embedded as window.TREEMAP_DATA; JS builds the hierarchy."
   [data-by-source & {:keys [title]
                      :or {title "Code Metrics Treemap"}}]
-  (let [;; Build sources array for JS
-        sources (vec
-                  (for [[source-key data] data-by-source
-                        :when (seq data)
-                        :let [config (get source-configs source-key)
-                              tree (case source-key
-                                     :compiler (cctv.analyze/build-hierarchy data)
-                                     :classloader (cctv.analyze/build-class-hierarchy data))]]
-                    {:id (:id config)
-                     :label (:label config)
-                     :tree tree
-                     :metrics (mapv #(update % :key name) (:metrics config))
-                     :defaultSize (name (:default-size config))
-                     :defaultColor (name (:default-color config))}))
-        sources-json (json/write-value-as-string sources)
+  (let [data-json (json/write-value-as-string data-by-source)
         html-template (slurp-resource "treemap.html")
         css (slurp-resource "treemap.css")
         js (slurp-resource "treemap.js")]
@@ -56,7 +26,7 @@
         (str/replace "{{TITLE}}" title)
         (str/replace "{{CSS}}" css)
         (str/replace "{{JS}}" js)
-        (str/replace "{{SOURCES}}" sources-json))))
+        (str/replace "{{DATA}}" data-json))))
 
 (defn open-html
   "Write HTML and D3.js to temp directory and open in browser. Returns file path."
@@ -85,22 +55,33 @@
     {:file file-path
      :errors errors}))
 
+(defn export-metrics
+  "Export metrics to a JSON file.
+
+   Analyzes the given namespaces and writes the results to path.
+   The JSON file can be loaded into the treemap viewer via file upload.
+
+   Returns {:file \"path\" :errors [...]}.
+
+   WARNING: Not thread-safe. Do not call concurrently from multiple threads."
+  [ns-syms path]
+  (let [{:keys [result errors]} (cctv.analyze/analyze-nses ns-syms)
+        output {:version 1
+                :generated (.toString (java.time.Instant/now))
+                :namespaces (mapv str ns-syms)
+                :compiler (:compiler result)
+                :classloader (:classloader result)}]
+    (spit path (json/write-value-as-string output))
+    {:file path
+     :errors errors}))
+
 
 (comment
   (def analysis (cctv.analyze/analyze-nses '[clojure-compiler-treemap-view.analyze]))
   (def analysis (cctv.analyze/analyze-captured))
-  (def result (:result analysis))
-  (def errors (:errors analysis))
 
-  ;; result now has :compiler and :classloader keys
-  (:compiler result)
-  (:classloader result)
+  (:errors analysis)
 
-  ;; Build hierarchies
-  (def compiler-tree (cctv.analyze/build-hierarchy (:compiler result)))
-  (def class-tree (cctv.analyze/build-class-hierarchy (:classloader result)))
-
-  ;; Open with all sources
-  (open-html (render-html result))
+  (-> analysis :result render-html open-html)
 
   ,)

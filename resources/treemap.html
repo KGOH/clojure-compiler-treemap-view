@@ -33,6 +33,7 @@
         <input type="text" id="search-input" placeholder="Search ns/symbol...">
         <div class="suggestions" id="suggestions"></div>
       </div>
+      <button id="upload-btn" class="upload-btn" title="Load JSON file">📁 Load</button>
     </div>
   </div>
   <div class="info-panel" id="info-panel"></div>
@@ -40,6 +41,20 @@
     <div id="treemap"></div>
   </div>
 
+  <!-- Upload overlay (shown when no data or user clicks Load) -->
+  <div id="upload-overlay" class="upload-overlay">
+    <div id="upload-zone" class="upload-zone">
+      <div class="upload-icon">📁</div>
+      <div class="upload-text">Drop JSON file here or click to select</div>
+      <div class="upload-hint">Export from REPL: (export-metrics '[ns1 ns2] "metrics.json")</div>
+    </div>
+  </div>
+  <input type="file" id="file-input" accept=".json" style="display: none;">
+
+  <script>
+    // Embedded data (set by render-html, or null for standalone viewer)
+    window.TREEMAP_DATA = {{DATA}};
+  </script>
   <script>
 {{JS}}
   </script>
