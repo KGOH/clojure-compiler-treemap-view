@@ -327,23 +327,19 @@ function buildSources(flatData) {
   if (flatData.compiler && flatData.compiler.length > 0) {
     const config = sourceConfigs.compiler;
     const filteredData = filterCompilerData(flatData.compiler);
-    if (filteredData.length > 0) {
-      sources.push({
-        ...config,
-        tree: buildHierarchy(filteredData, 'compiler')
-      });
-    }
+    sources.push({
+      ...config,
+      tree: filteredData.length > 0 ? buildHierarchy(filteredData, 'compiler') : { name: 'root', children: [] }
+    });
   }
 
   if (flatData.classloader && flatData.classloader.length > 0) {
     const config = sourceConfigs.classloader;
     const filteredData = filterClassloaderData(flatData.classloader);
-    if (filteredData.length > 0) {
-      sources.push({
-        ...config,
-        tree: buildHierarchy(filteredData, 'classloader')
-      });
-    }
+    sources.push({
+      ...config,
+      tree: filteredData.length > 0 ? buildHierarchy(filteredData, 'classloader') : { name: 'root', children: [] }
+    });
   }
 
   return sources;
