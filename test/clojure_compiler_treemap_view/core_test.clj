@@ -68,18 +68,4 @@
       (is (str/includes? content "<!DOCTYPE html"))
       (is (str/includes? content "d3.v7.min.js"))
       (is (str/includes? content "treemap"))
-      (is (str/includes? content "const sources ="))
-      (is (str/includes? content "const defaultSourceId = 'compiler'")))))
-
-(deftest test-render-html-with-options
-  (testing "render-html respects default-source option"
-    (let [{:keys [result]} (cctv.analyze/analyze-nses '[clojure-compiler-treemap-view.fixtures.alpha])
-          content (core/render-html result :default-source :classloader)]
-      (is (str/includes? content "const defaultSourceId = 'classloader'")))))
-
-(deftest test-treemap-source-option
-  (testing "treemap! accepts :source option"
-    ;; Just test that the function accepts the option without error
-    ;; (actual browser opening is a side effect we can't easily test)
-    (let [{:keys [errors]} (core/treemap! '[clojure-compiler-treemap-view.fixtures.alpha] :source :classloader)]
-      (is (= [] errors)))))
+      (is (str/includes? content "const sources =")))))

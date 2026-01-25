@@ -32,9 +32,8 @@
 
    data-by-source: map of {:compiler [...] :classloader [...]}
    Each value is flat fn-data that will be converted to a hierarchy."
-  [data-by-source & {:keys [default-source title]
-                     :or {default-source :compiler
-                          title "Code Metrics Treemap"}}]
+  [data-by-source & {:keys [title]
+                     :or {title "Code Metrics Treemap"}}]
   (let [;; Build sources array for JS
         sources (vec
                   (for [[source-key data] data-by-source
@@ -50,7 +49,6 @@
                      :defaultSize (name (:default-size config))
                      :defaultColor (name (:default-color config))}))
         sources-json (json/write-value-as-string sources)
-        default-source-id (name default-source)
         html-template (slurp-resource "treemap.html")
         css (slurp-resource "treemap.css")
         js (slurp-resource "treemap.js")]
@@ -58,8 +56,7 @@
         (str/replace "{{TITLE}}" title)
         (str/replace "{{CSS}}" css)
         (str/replace "{{JS}}" js)
-        (str/replace "{{SOURCES}}" sources-json)
-        (str/replace "{{DEFAULT_SOURCE}}" default-source-id))))
+        (str/replace "{{SOURCES}}" sources-json))))
 
 (defn open-html
   "Write HTML and D3.js to temp directory and open in browser. Returns file path."
@@ -79,24 +76,19 @@
 
    Returns {:file \"path\" :errors [...]}.
 
-   Options:
-     :source - Default data source to show (:compiler or :classloader, default :compiler)
-
    The UI provides dropdowns to switch between data sources and metrics.
 
    WARNING: Not thread-safe. Do not call concurrently from multiple threads."
-  [ns-syms & {:keys [source]
-              :or {source :compiler}}]
+  [ns-syms]
   (let [{:keys [result errors]} (cctv.analyze/analyze-nses ns-syms)
-        file-path (-> result
-                      (render-html :default-source source)
-                      open-html)]
+        file-path (-> result render-html open-html)]
     {:file file-path
      :errors errors}))
 
 
 (comment
   (def analysis (cctv.analyze/analyze-nses '[clojure-compiler-treemap-view.analyze]))
+  (def analysis (cctv.analyze/analyze-captured))
   (def result (:result analysis))
   (def errors (:errors analysis))
 

@@ -1,9 +1,8 @@
 // Data sources (injected by render-html)
 const sources = {{SOURCES}};
-const defaultSourceId = '{{DEFAULT_SOURCE}}';
 
-// Current source state
-let currentSource = sources.find(s => s.id === defaultSourceId) || sources[0];
+// Current source state (first source is default)
+let currentSource = sources[0];
 let data = currentSource.tree;
 let metricsOptions = currentSource.metrics;
 
