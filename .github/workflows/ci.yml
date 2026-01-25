@@ -92,8 +92,7 @@ jobs:
                    '[clojure-compiler-treemap-view.analyze :as cctv.analyze])
           ;; analyze-captured processes forms captured during require above
           (let [{:keys [result]} (cctv.analyze/analyze-captured)
-                tree (cctv.analyze/build-hierarchy result)
-                html (cctv/render-html tree :title \"Clojure Compiler Treemap View\")]
+                html (cctv/render-html result :title \"Clojure Compiler Treemap View\")]
             (spit \"_site/index.html\" html))
           "
 
