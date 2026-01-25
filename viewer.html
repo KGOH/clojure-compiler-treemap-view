@@ -244,6 +244,8 @@ const CLOJURE_STDLIB_PREFIXES = [
   'clojure.asm',
   'clojure.core',
   'clojure.edn',
+  'clojure.genclass',
+  'clojure.gvec',
   'clojure.instant',
   'clojure.java',
   'clojure.lang',
@@ -277,6 +279,7 @@ function isClojureStdlib(fullName) {
   return CLOJURE_STDLIB_PREFIXES.some(prefix =>
     fullName.startsWith(prefix + '.') ||
     fullName.startsWith(prefix + '$') ||
+    fullName.startsWith(prefix + '_') ||   // clojure.core_deftype, clojure.core_print, etc.
     fullName.startsWith(prefix + '__') ||  // __init classes
     fullName === prefix
   );
