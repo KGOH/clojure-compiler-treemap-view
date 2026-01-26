@@ -215,7 +215,11 @@ const sourceConfigs = {
       { key: 'max-depth-raw', label: 'Max Depth (Raw)' },
       { key: 'max-depth-expanded', label: 'Max Depth (Expanded)' },
       { key: 'fan-in-ns-count', label: 'Fan-In (Namespaces)' },
-      { key: 'fan-in-fn-count', label: 'Fan-In (Functions)' }
+      { key: 'fan-in-fn-count', label: 'Fan-In (Functions)' },
+      { key: 'library-ns-count', label: 'Library (Namespaces)' },
+      { key: 'library-fn-count', label: 'Library (Functions)' },
+      { key: 'entanglement-ns-count', label: 'Entanglement (Namespaces)' },
+      { key: 'entanglement-fn-count', label: 'Entanglement (Functions)' }
     ],
     defaultSize: 'expressions-raw',
     defaultColor: 'max-depth-raw'
@@ -1083,7 +1087,11 @@ function parsePrometheus(text) {
         'clojure_max_depth_expanded': 'max-depth-expanded',
         'clojure_unused': 'unused?',
         'clojure_fan_in_ns_count': 'fan-in-ns-count',
-        'clojure_fan_in_fn_count': 'fan-in-fn-count'
+        'clojure_fan_in_fn_count': 'fan-in-fn-count',
+        'clojure_library_ns_count': 'library-ns-count',
+        'clojure_library_fn_count': 'library-fn-count',
+        'clojure_entanglement_ns_count': 'entanglement-ns-count',
+        'clojure_entanglement_fn_count': 'entanglement-fn-count'
       };
       const jsonKey = metricMap[metricName];
       if (jsonKey) {

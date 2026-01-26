@@ -169,6 +169,77 @@
         fn-data-seq))
 
 ;; ============================================================================
+;; Entanglement Metrics (Outgoing Dependencies)
+;; ============================================================================
+
+(defn- invert-caller-map
+  "Invert {callee -> #{callers}} to {caller -> #{callees}}.
+   Filters out nil callers (top-level references)."
+  [caller-map]
+  (reduce-kv
+    (fn [acc callee callers]
+      (reduce (fn [m caller]
+                (if caller
+                  (update m caller (fnil conj #{}) callee)
+                  m))
+              acc
+              callers))
+    {}
+    caller-map))
+
+(defn- classify-callee
+  "Classify a callee as :self, :core, :library, or :entangled.
+
+   - :self - same namespace as caller (not counted)
+   - :core - clojure.core (baseline, not counted)
+   - :library - external dependency (not matching project-prefix)
+   - :entangled - project code in different namespace"
+  [callee caller-ns project-prefix]
+  (let [callee-ns (first (str/split callee #"/"))]
+    (cond
+      (= callee-ns caller-ns) :self
+      (= callee-ns "clojure.core") :core
+      (not (str/starts-with? callee-ns project-prefix)) :library
+      :else :entangled)))
+
+(defn- build-entanglement-map
+  "Build entanglement metrics from inverted caller map.
+
+   Takes inverted caller map {caller -> #{callees}} and project-prefix.
+   Returns map of {caller -> {:library-ns-count n :library-fn-count n
+                              :entanglement-ns-count n :entanglement-fn-count n}}.
+
+   When project-prefix is nil, returns empty map (metrics not computed)."
+  [inverted-map project-prefix]
+  (if (nil? project-prefix)
+    {}
+    (into {}
+          (for [[caller callees] inverted-map
+                :let [caller-ns (first (str/split caller #"/"))
+                      classified (group-by #(classify-callee % caller-ns project-prefix) callees)
+                      library-fns (:library classified [])
+                      entangled-fns (:entangled classified [])
+                      library-nses (distinct (map #(first (str/split % #"/")) library-fns))
+                      entangled-nses (distinct (map #(first (str/split % #"/")) entangled-fns))]]
+            [caller {:library-ns-count (count library-nses)
+                     :library-fn-count (count library-fns)
+                     :entanglement-ns-count (count entangled-nses)
+                     :entanglement-fn-count (count entangled-fns)}]))))
+
+(def ^:private zero-entanglement-metrics
+  {:library-ns-count 0 :library-fn-count 0
+   :entanglement-ns-count 0 :entanglement-fn-count 0})
+
+(defn- add-entanglement-metrics
+  "Add entanglement metrics to each fn-data entry."
+  [fn-data-seq entanglement-map]
+  (mapv (fn [{:keys [ns name] :as fn-data}]
+          (let [qualified (str ns "/" name)
+                metrics (get entanglement-map qualified zero-entanglement-metrics)]
+            (update fn-data :metrics merge metrics)))
+        fn-data-seq))
+
+;; ============================================================================
 ;; Analyze Captured (no reload)
 ;; ============================================================================
 
@@ -183,11 +254,13 @@
    Options:
      :ns-syms - Optional collection of namespace symbols to filter by.
                 If nil, processes all captured defs.
+     :project-prefix - String prefix for project namespaces (e.g., \"myproject.\").
+                       When provided, computes entanglement metrics.
 
    Returns {:result {:compiler [...] :classloader [...]} :errors [...]}.
 
    WARNING: Not thread-safe. Do not call concurrently from multiple threads."
-  [& {:keys [ns-syms]}]
+  [& {:keys [ns-syms project-prefix]}]
   (let [captured (agent/get-captured-defs)
         ns-strs (when ns-syms (set (map str ns-syms)))
         fn-data (process-captured-defs captured ns-strs)
@@ -197,10 +270,14 @@
         ;; Build fan-in metrics from caller map
         caller-map (agent/get-var-caller-map)
         fan-in-map (build-fan-in-map caller-map)
-        ;; Add both unused and fan-in metrics
+        ;; Build entanglement metrics (outgoing deps)
+        inverted-map (invert-caller-map caller-map)
+        entanglement-map (build-entanglement-map inverted-map project-prefix)
+        ;; Add all metrics
         compiler-data (-> fn-data
                           (add-unused-flags unused-vars)
-                          (add-fan-in-metrics fan-in-map))
+                          (add-fan-in-metrics fan-in-map)
+                          (add-entanglement-metrics entanglement-map))
         ;; Class loader data (munge ns names: foo-bar -> foo_bar)
         ns-prefixes (when ns-syms
                       (set (map #(str/replace (str %) "-" "_") ns-syms)))
@@ -220,13 +297,17 @@
    This clears all capture buffers (defs, var refs, classes), loads all
    namespaces (in order), then processes captured data.
 
+   Options:
+     :project-prefix - String prefix for project namespaces (e.g., \"myproject.\").
+                       When provided, computes entanglement metrics.
+
    Returns {:result {:compiler [...] :classloader [...]} :errors [...]} where:
-     :compiler   - seq of function data maps, each with :unused? and fan-in metrics
+     :compiler   - seq of function data maps with :unused?, fan-in, and entanglement metrics
      :classloader - seq of class data maps with :bytecode-size metric
      :errors     - vector of error maps from this analysis run
 
    WARNING: Not thread-safe. Do not call concurrently from multiple threads."
-  [ns-syms]
+  [ns-syms & {:keys [project-prefix]}]
   (with-error-tracking
     (with-capture
       (doseq [ns-sym ns-syms]
@@ -241,10 +322,14 @@
             ;; Build fan-in metrics from caller map
             caller-map (agent/get-var-caller-map)
             fan-in-map (build-fan-in-map caller-map)
-            ;; Add both unused and fan-in metrics
+            ;; Build entanglement metrics (outgoing deps)
+            inverted-map (invert-caller-map caller-map)
+            entanglement-map (build-entanglement-map inverted-map project-prefix)
+            ;; Add all metrics
             compiler-data (-> fn-data
                               (add-unused-flags unused-vars)
-                              (add-fan-in-metrics fan-in-map))
+                              (add-fan-in-metrics fan-in-map)
+                              (add-entanglement-metrics entanglement-map))
             ;; Class loader data (munge ns names: foo-bar -> foo_bar)
             ns-prefixes (set (map #(str/replace (str %) "-" "_") ns-syms))
             classes (agent/get-loaded-classes)
