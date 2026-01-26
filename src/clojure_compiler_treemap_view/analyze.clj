@@ -27,7 +27,7 @@
    Bound to a fresh atom at the start of each analysis operation."
   nil)
 
-(defn- record-error! [ns-sym phase exception]
+(defn- record-error! [ns-sym phase ^Throwable exception]
   (when *errors*
     (swap! *errors* conj {:ns ns-sym
                           :phase phase

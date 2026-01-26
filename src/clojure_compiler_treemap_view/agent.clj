@@ -77,7 +77,7 @@
    Only includes classes that passed the filter (excludes JDK classes)."
   []
   (into {}
-        (for [[class-name metrics-arr] (ClassLoadBridge/getLoadedClasses)]
+        (for [[class-name ^ints metrics-arr] (ClassLoadBridge/getLoadedClasses)]
           [class-name {:bytecode-size (aget metrics-arr ClassLoadBridge/IDX_BYTECODE_SIZE)
                        :field-count (aget metrics-arr ClassLoadBridge/IDX_FIELD_COUNT)
                        :instruction-count (aget metrics-arr ClassLoadBridge/IDX_INSTRUCTION_COUNT)}])))
