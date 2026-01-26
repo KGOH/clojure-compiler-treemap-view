@@ -2,6 +2,7 @@
 .cpcache/
 .nrepl-port
 *.jar
+!agent/metrics-agent.jar
 *.class
 target/
 
