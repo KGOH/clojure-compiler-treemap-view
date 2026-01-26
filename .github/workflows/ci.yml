@@ -69,14 +69,16 @@ jobs:
             ${{ runner.os }}-clojure-
       - name: Build metrics agent
         run: mvn -f metrics-agent/pom.xml package -q
+      - name: Copy pre-built JAR
+        run: cp metrics-agent/target/metrics-agent-0.1.0-SNAPSHOT.jar agent/metrics-agent.jar
       - name: Generate metrics
         run: |
           clojure -M:agent:generate-metrics
           mv metrics.prom metrics.prom.new
-      - name: Commit metrics if changed
+      - name: Commit artifacts if changed
         run: |
           mv metrics.prom.new metrics.prom
-          git add metrics.prom
+          git add metrics.prom agent/metrics-agent.jar
 
           # Check if there are staged changes
           if git diff --cached --quiet; then
@@ -86,5 +88,5 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git commit -m "Update metrics.prom [skip ci]"
+          git commit -m "Update metrics.prom and pre-built JAR [skip ci]"
           git push
