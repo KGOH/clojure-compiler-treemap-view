@@ -140,6 +140,34 @@
             (assoc-in fn-data [:metrics :unused?] unused?)))
         fn-data-seq))
 
+(defn- build-fan-in-map
+  "Build fan-in metrics from caller map.
+
+   Takes a caller map {callee -> #{callers}} and returns a map of
+   {callee -> {:fan-in-ns-count n :fan-in-fn-count n}}.
+
+   Self-namespace callers are excluded (internal calls don't count as fan-in)."
+  [caller-map]
+  (into {}
+        (for [[callee callers] caller-map
+              :let [callee-ns (first (str/split callee #"/"))
+                    ;; Filter out same-namespace callers
+                    external-callers (remove #(str/starts-with? % (str callee-ns "/")) callers)
+                    ;; Group by caller namespace for ns count
+                    by-ns (group-by #(first (str/split % #"/")) external-callers)]]
+          [callee {:fan-in-ns-count (count by-ns)
+                   :fan-in-fn-count (count external-callers)}])))
+
+(defn- add-fan-in-metrics
+  "Add fan-in metrics to each fn-data entry."
+  [fn-data-seq fan-in-map]
+  (mapv (fn [{:keys [ns name] :as fn-data}]
+          (let [qualified (str ns "/" name)
+                fan-in (get fan-in-map qualified {:fan-in-ns-count 0
+                                                   :fan-in-fn-count 0})]
+            (update fn-data :metrics merge fan-in)))
+        fn-data-seq))
+
 ;; ============================================================================
 ;; Analyze Captured (no reload)
 ;; ============================================================================
@@ -166,7 +194,13 @@
         nses-to-check (or ns-syms
                           (->> fn-data (map :ns) distinct (map symbol)))
         unused-vars (agent/find-unused-vars nses-to-check)
-        compiler-data (add-unused-flags fn-data unused-vars)
+        ;; Build fan-in metrics from caller map
+        caller-map (agent/get-var-caller-map)
+        fan-in-map (build-fan-in-map caller-map)
+        ;; Add both unused and fan-in metrics
+        compiler-data (-> fn-data
+                          (add-unused-flags unused-vars)
+                          (add-fan-in-metrics fan-in-map))
         ;; Class loader data (munge ns names: foo-bar -> foo_bar)
         ns-prefixes (when ns-syms
                       (set (map #(str/replace (str %) "-" "_") ns-syms)))
@@ -187,7 +221,7 @@
    namespaces (in order), then processes captured data.
 
    Returns {:result {:compiler [...] :classloader [...]} :errors [...]} where:
-     :compiler   - seq of function data maps, each with :unused? in metrics
+     :compiler   - seq of function data maps, each with :unused? and fan-in metrics
      :classloader - seq of class data maps with :bytecode-size metric
      :errors     - vector of error maps from this analysis run
 
@@ -204,7 +238,13 @@
             ;; Compiler data
             fn-data (process-captured-defs captured ns-strs)
             unused-vars (agent/find-unused-vars ns-syms)
-            compiler-data (add-unused-flags fn-data unused-vars)
+            ;; Build fan-in metrics from caller map
+            caller-map (agent/get-var-caller-map)
+            fan-in-map (build-fan-in-map caller-map)
+            ;; Add both unused and fan-in metrics
+            compiler-data (-> fn-data
+                              (add-unused-flags unused-vars)
+                              (add-fan-in-metrics fan-in-map))
             ;; Class loader data (munge ns names: foo-bar -> foo_bar)
             ns-prefixes (set (map #(str/replace (str %) "-" "_") ns-syms))
             classes (agent/get-loaded-classes)

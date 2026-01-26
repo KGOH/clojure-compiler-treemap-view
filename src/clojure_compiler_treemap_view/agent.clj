@@ -97,6 +97,15 @@
   []
   (into #{} (VarRefBridge/getReferences)))
 
+(defn get-var-caller-map
+  "Return map of {callee-var -> #{caller-vars}} for fan-in metrics.
+   Both keys and values are qualified \"ns/name\" strings.
+   Callers may be nil for top-level references (not inside a def)."
+  []
+  (into {}
+        (for [[callee callers] (VarRefBridge/getCallerMap)]
+          [callee (into #{} callers)])))
+
 (defn clear-var-references!
   "Clear all captured var references."
   []

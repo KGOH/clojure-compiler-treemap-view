@@ -213,7 +213,9 @@ const sourceConfigs = {
       { key: 'expressions-raw', label: 'Expressions (Raw)' },
       { key: 'expressions-expanded', label: 'Expressions (Expanded)' },
       { key: 'max-depth-raw', label: 'Max Depth (Raw)' },
-      { key: 'max-depth-expanded', label: 'Max Depth (Expanded)' }
+      { key: 'max-depth-expanded', label: 'Max Depth (Expanded)' },
+      { key: 'fan-in-ns-count', label: 'Fan-In (Namespaces)' },
+      { key: 'fan-in-fn-count', label: 'Fan-In (Functions)' }
     ],
     defaultSize: 'expressions-raw',
     defaultColor: 'max-depth-raw'
@@ -1076,7 +1078,9 @@ function parsePrometheus(text) {
         'clojure_expressions_expanded': 'expressions-expanded',
         'clojure_max_depth_raw': 'max-depth-raw',
         'clojure_max_depth_expanded': 'max-depth-expanded',
-        'clojure_unused': 'unused?'
+        'clojure_unused': 'unused?',
+        'clojure_fan_in_ns_count': 'fan-in-ns-count',
+        'clojure_fan_in_fn_count': 'fan-in-fn-count'
       };
       const jsonKey = metricMap[metricName];
       if (jsonKey) {

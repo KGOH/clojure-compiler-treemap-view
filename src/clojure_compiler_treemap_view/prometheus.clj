@@ -27,12 +27,15 @@
 (defn- compiler-entry->lines [{:keys [name ns line metrics]}]
   (let [labels {:ns ns :name name :line (when line (str line))}
         {:keys [expressions-raw expressions-expanded
-                max-depth-raw max-depth-expanded unused?]} metrics]
+                max-depth-raw max-depth-expanded unused?
+                fan-in-ns-count fan-in-fn-count]} metrics]
     [(metric-line "clojure_expressions_raw" labels expressions-raw)
      (metric-line "clojure_expressions_expanded" labels expressions-expanded)
      (metric-line "clojure_max_depth_raw" labels max-depth-raw)
      (metric-line "clojure_max_depth_expanded" labels max-depth-expanded)
-     (metric-line "clojure_unused" labels (if unused? 1 0))]))
+     (metric-line "clojure_unused" labels (if unused? 1 0))
+     (metric-line "clojure_fan_in_ns_count" labels (or fan-in-ns-count 0))
+     (metric-line "clojure_fan_in_fn_count" labels (or fan-in-fn-count 0))]))
 
 (defn- classloader-entry->lines [{:keys [name ns full-name metrics]}]
   (let [labels {:ns ns :name name :full_name full-name}]
@@ -53,7 +56,11 @@
                          "# HELP clojure_max_depth_expanded Max nesting depth after macro expansion"
                          "# TYPE clojure_max_depth_expanded gauge"
                          "# HELP clojure_unused 1 if var defined but never referenced"
-                         "# TYPE clojure_unused gauge"]
+                         "# TYPE clojure_unused gauge"
+                         "# HELP clojure_fan_in_ns_count Unique namespaces referencing this function"
+                         "# TYPE clojure_fan_in_ns_count gauge"
+                         "# HELP clojure_fan_in_fn_count Unique functions referencing this function"
+                         "# TYPE clojure_fan_in_fn_count gauge"]
         compiler-lines (mapcat compiler-entry->lines (:compiler metrics-data))
         classloader-header ["# HELP clojure_bytecode_size Class bytecode size in bytes"
                             "# TYPE clojure_bytecode_size gauge"

@@ -29,6 +29,9 @@ public class MacroexpandUnifiedAdvice {
     /** Store compiler line at entry (thread-bound, may change) */
     public static final ThreadLocal<Integer> ENTRY_LINE = new ThreadLocal<>();
 
+    /** Store current def name for var reference tracking (fan-in metrics) */
+    public static final ThreadLocal<String> CURRENT_DEF_NAME = new ThreadLocal<>();
+
     /** Debug flag - set via -Dclojure.metrics.debug=true */
     public static final boolean DEBUG = Boolean.getBoolean("clojure.metrics.debug");
 
@@ -67,6 +70,13 @@ public class MacroexpandUnifiedAdvice {
 
             // Capture raw form
             capture(form, "raw");
+
+            // Set current def name for var reference tracking
+            String defName = extractDefName(form);
+            if (defName != null) {
+                CURRENT_DEF_NAME.set(defName);
+            }
+
             return 2;
         }
 
@@ -88,7 +98,10 @@ public class MacroexpandUnifiedAdvice {
                 capture(result, "expanded");
             }
 
-            ENTRY_NS.remove();
+            // NOTE: Don't clear ENTRY_NS or CURRENT_DEF_NAME here - VarExpr instances are
+            // created AFTER macroexpand returns, during the analyze phase. They need both
+            // values for fan-in tracking. Values are overwritten when the next def form
+            // is encountered at depth 0.
             ENTRY_LINE.remove();
         }
     }
@@ -152,6 +165,28 @@ public class MacroexpandUnifiedAdvice {
             }
         }
         return "user";
+    }
+
+    /**
+     * Extract def name from form (second element).
+     * E.g., (defn foo [x] ...) -> "foo"
+     */
+    public static String extractDefName(Object form) {
+        try {
+            // form.next().first() gives the name symbol
+            Object rest = form.getClass().getMethod("next").invoke(form);
+            if (rest != null) {
+                Object nameSym = rest.getClass().getMethod("first").invoke(rest);
+                if (nameSym != null) {
+                    return nameSym.toString();
+                }
+            }
+        } catch (Exception e) {
+            if (DEBUG) {
+                System.err.println("[metrics-agent] extractDefName() failed: " + e.getMessage());
+            }
+        }
+        return null;
     }
 
     /** Get current line from Compiler.LINE */

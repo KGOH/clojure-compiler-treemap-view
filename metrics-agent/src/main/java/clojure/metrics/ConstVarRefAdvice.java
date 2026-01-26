@@ -71,11 +71,19 @@ public class ConstVarRefAdvice {
                         Object nsName = ns.getClass().getMethod("getName").invoke(ns);
                         Object varSym = resolved.getClass().getField("sym").get(resolved);
 
-                        String varName = nsName.toString() + "/" + varSym.toString();
-                        VarRefBridge.captureReference(varName);
+                        String callee = nsName.toString() + "/" + varSym.toString();
+
+                        // Get caller context from MacroexpandUnifiedAdvice ThreadLocals
+                        String callerNs = MacroexpandUnifiedAdvice.ENTRY_NS.get();
+                        String callerName = MacroexpandUnifiedAdvice.CURRENT_DEF_NAME.get();
+                        String caller = (callerNs != null && callerName != null)
+                            ? callerNs + "/" + callerName
+                            : null;
+
+                        VarRefBridge.captureReference(callee, caller);
 
                         if (DEBUG) {
-                            System.err.println("[metrics-agent] Captured const var: " + varName);
+                            System.err.println("[metrics-agent] Captured const var: " + callee + " (caller: " + caller + ")");
                         }
                     }
                 }
