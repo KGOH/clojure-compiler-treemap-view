@@ -797,7 +797,10 @@ function render() {
     let bgColor;
     if (d.data.metrics) {
       const val = d.data.metrics[colorKey];
-      bgColor = (typeof val === 'number' && val !== null) ? colorScale(val) : '#073642';
+      // Use grey for zero values to differentiate from low-but-nonzero
+      bgColor = (typeof val === 'number' && val !== null)
+        ? (val === 0 ? '#586e75' : colorScale(val))
+        : '#073642';
       const gradient = `linear-gradient(315deg, #fdf6e3a0, ${bgColor})`;
       if (d.data.metrics['failed?']) {
         cell.classList.add('failed');
