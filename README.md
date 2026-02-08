@@ -54,11 +54,15 @@ The agent must be loaded at JVM startup. Without it, all analysis functions will
 (def analysis (cctv/analyze-nses '[my.app.core my.app.handlers]))
 (cctv/write-metrics (:result analysis) "metrics.prom")
 
-;; Open viewer in browser (viewer.html loads the .prom file)
+;; Open viewer in browser, then drag & drop the .prom file
 (clojure.java.browse/browse-url
-  (str "file://" (.getAbsolutePath (java.io.File. "viewer.html"))
-       "?data=file://" (.getAbsolutePath (java.io.File. "metrics.prom"))))
+  (str "file://" (.getAbsolutePath (java.io.File. "viewer.html"))))
 ```
+
+> **Tip**: When serving `viewer.html` over HTTP (e.g. `python3 -m http.server`), you can
+> append `?data=URL` to auto-load a metrics file:
+> `http://localhost:8000/viewer.html?data=http://localhost:8000/metrics.prom`.
+> This is useful for CI dashboards where both files are hosted on the same server.
 
 ### Discovering What You Actually Loaded
 

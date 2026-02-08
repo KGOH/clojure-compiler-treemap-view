@@ -53,7 +53,7 @@
   (def analyzed (analyze-nses (->> (all-ns) (map ns-name))))
   (def metrics-path (write-metrics (:result analyzed) "metrics.prom"))
 
-  ;; Open in browser
-  (clojure.java.browse/browse-url (str "file://" (.getAbsolutePath (java.io.File. "viewer.html")) "?data=file://" metrics-path))
+  ;; Open viewer in browser, then drag & drop the .prom file
+  (clojure.java.browse/browse-url (str "file://" (.getAbsolutePath (java.io.File. "viewer.html"))))
 
   ,)

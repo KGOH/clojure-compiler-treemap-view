@@ -13,7 +13,7 @@ clj -M:agent
 (require '[clojure-compiler-treemap-view.core :as cctv])
 (def analysis (cctv/analyze-captured))
 (cctv/write-metrics (:result analysis) "metrics.prom")
-;; Open viewer.html?data=file:///path/to/metrics.prom in browser
+;; Open viewer.html in browser, then drag & drop the .prom file
 ```
 
 ## Architecture
