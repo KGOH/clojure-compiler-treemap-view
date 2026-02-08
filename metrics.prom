@@ -5110,9 +5110,9 @@ clojure_instruction_count{name="LinkedHashIterator",full_name="java.util.LinkedH
 clojure_bytecode_size{name="blank_QMARK_",full_name="clojure.string$blank_QMARK_"} 1195
 clojure_field_count{name="blank_QMARK_",full_name="clojure.string$blank_QMARK_"} 0
 clojure_instruction_count{name="blank_QMARK_",full_name="clojure.string$blank_QMARK_"} 48
-clojure_bytecode_size{name="VarForm",full_name="java.lang.invoke.VarForm"} 5063
+clojure_bytecode_size{name="VarForm",full_name="java.lang.invoke.VarForm"} 5159
 clojure_field_count{name="VarForm",full_name="java.lang.invoke.VarForm"} 4
-clojure_instruction_count{name="VarForm",full_name="java.lang.invoke.VarForm"} 245
+clojure_instruction_count{name="VarForm",full_name="java.lang.invoke.VarForm"} 247
 clojure_bytecode_size{name="ByteArrayAccess",full_name="sun.security.provider.ByteArrayAccess"} 2978
 clojure_field_count{name="ByteArrayAccess",full_name="sun.security.provider.ByteArrayAccess"} 0
 clojure_instruction_count{name="ByteArrayAccess",full_name="sun.security.provider.ByteArrayAccess"} 427
@@ -6391,9 +6391,9 @@ clojure_instruction_count{name="Branch",full_name="java.util.regex.Pattern$Branc
 clojure_bytecode_size{name="or_k_gen",full_name="clojure.spec.alpha$or_k_gen"} 1886
 clojure_field_count{name="or_k_gen",full_name="clojure.spec.alpha$or_k_gen"} 8
 clojure_instruction_count{name="or_k_gen",full_name="clojure.spec.alpha$or_k_gen"} 99
-clojure_bytecode_size{name="Parser",full_name="java.net.URI$Parser"} 10522
+clojure_bytecode_size{name="Parser",full_name="java.net.URI$Parser"} 10685
 clojure_field_count{name="Parser",full_name="java.net.URI$Parser"} 4
-clojure_instruction_count{name="Parser",full_name="java.net.URI$Parser"} 1420
+clojure_instruction_count{name="Parser",full_name="java.net.URI$Parser"} 1455
 clojure_bytecode_size{name="check_cyclic_dependency",full_name="clojure.core$check_cyclic_dependency"} 1875
 clojure_field_count{name="check_cyclic_dependency",full_name="clojure.core$check_cyclic_dependency"} 2
 clojure_instruction_count{name="check_cyclic_dependency",full_name="clojure.core$check_cyclic_dependency"} 71
@@ -8128,6 +8128,9 @@ clojure_instruction_count{name="TypeProjection",full_name="clojure.metrics.shade
 clojure_bytecode_size{name="Latent",full_name="clojure.metrics.shaded.bytebuddy.description.type.TypeDescription$Generic$OfWildcardType$Latent"} 3885
 clojure_field_count{name="Latent",full_name="clojure.metrics.shaded.bytebuddy.description.type.TypeDescription$Generic$OfWildcardType$Latent"} 3
 clojure_instruction_count{name="Latent",full_name="clojure.metrics.shaded.bytebuddy.description.type.TypeDescription$Generic$OfWildcardType$Latent"} 58
+clojure_bytecode_size{name="URLClassLoader",full_name="java.net.URLClassLoader"} 14814
+clojure_field_count{name="URLClassLoader",full_name="java.net.URLClassLoader"} 3
+clojure_instruction_count{name="URLClassLoader",full_name="java.net.URLClassLoader"} 831
 clojure_bytecode_size{name="2",full_name="clojure.lang.Var$2"} 681
 clojure_field_count{name="2",full_name="clojure.lang.Var$2"} 0
 clojure_instruction_count{name="2",full_name="clojure.lang.Var$2"} 8
@@ -9874,9 +9877,9 @@ clojure_instruction_count{name="op_unform",full_name="clojure.spec.alpha$op_unfo
 clojure_bytecode_size{name="gen_for_name",full_name="clojure.spec.gen.alpha$gen_for_name"} 1543
 clojure_field_count{name="gen_for_name",full_name="clojure.spec.gen.alpha$gen_for_name"} 3
 clojure_instruction_count{name="gen_for_name",full_name="clojure.spec.gen.alpha$gen_for_name"} 60
-clojure_bytecode_size{name="ZoneInfoFile",full_name="sun.util.calendar.ZoneInfoFile"} 17167
+clojure_bytecode_size{name="ZoneInfoFile",full_name="sun.util.calendar.ZoneInfoFile"} 17155
 clojure_field_count{name="ZoneInfoFile",full_name="sun.util.calendar.ZoneInfoFile"} 22
-clojure_instruction_count{name="ZoneInfoFile",full_name="sun.util.calendar.ZoneInfoFile"} 2253
+clojure_instruction_count{name="ZoneInfoFile",full_name="sun.util.calendar.ZoneInfoFile"} 2249
 clojure_bytecode_size{name="MapReader",full_name="clojure.lang.LispReader$MapReader"} 1333
 clojure_field_count{name="MapReader",full_name="clojure.lang.LispReader$MapReader"} 0
 clojure_instruction_count{name="MapReader",full_name="clojure.lang.LispReader$MapReader"} 27
@@ -10492,9 +10495,9 @@ clojure_instruction_count{name="AnnotationAdapter",full_name="clojure.metrics.sh
 clojure_bytecode_size{name="Species_LLLLLLLL",full_name="java.lang.invoke.BoundMethodHandle$Species_LLLLLLLL"} 4047
 clojure_field_count{name="Species_LLLLLLLL",full_name="java.lang.invoke.BoundMethodHandle$Species_LLLLLLLL"} 9
 clojure_instruction_count{name="Species_LLLLLLLL",full_name="java.lang.invoke.BoundMethodHandle$Species_LLLLLLLL"} 194
-clojure_bytecode_size{name="MessageHeader",full_name="sun.net.www.MessageHeader"} 11937
+clojure_bytecode_size{name="MessageHeader",full_name="sun.net.www.MessageHeader"} 11950
 clojure_field_count{name="MessageHeader",full_name="sun.net.www.MessageHeader"} 5
-clojure_instruction_count{name="MessageHeader",full_name="sun.net.www.MessageHeader"} 1334
+clojure_instruction_count{name="MessageHeader",full_name="sun.net.www.MessageHeader"} 1336
 clojure_bytecode_size{name="Node",full_name="clojure.lang.PersistentVector$Node"} 1117
 clojure_field_count{name="Node",full_name="clojure.lang.PersistentVector$Node"} 2
 clojure_instruction_count{name="Node",full_name="clojure.lang.PersistentVector$Node"} 19
